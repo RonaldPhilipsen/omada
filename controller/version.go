@@ -38,6 +38,15 @@ func ParseVersion(s string) (Version, error) {
 	return Version{segments: segments}, nil
 }
 
+// ParseVersionMust is ParseVersion for tests and constants; it panics on bad input.
+func ParseVersionMust(s string) Version {
+	v, err := ParseVersion(s)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
 // Compare returns -1, 0 or 1 when v is less than, equal to or greater than o.
 // Missing segments are treated as 0.
 func (v Version) Compare(o Version) int {
