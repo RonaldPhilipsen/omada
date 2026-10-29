@@ -17,10 +17,10 @@ const (
 // pageOutcome is one fetched page plus the facts needed to decide whether a
 // next page exists.
 type pageOutcome struct {
-	entries  []map[string]any
-	size     int
+	entries   []map[string]any
+	size      int
 	totalRows int64
-	hasTotal bool
+	hasTotal  bool
 }
 
 func (c *conn) collectPages(ctx context.Context, fetch func(page int) (pageOutcome, error)) ([]map[string]any, error) {

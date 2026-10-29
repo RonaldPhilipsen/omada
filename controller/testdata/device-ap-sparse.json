@@ -1,0 +1,61 @@
+{
+  "type": "ap",
+  "mac": "AA:BB:CC:DD:EE:02",
+  "model": "EAP653",
+  "status": 14,
+  "statusCategory": 1,
+  "ledSetting": 1,
+  "wirelessLinked": false,
+  "deviceMisc": {
+    "support5g": true,
+    "support6g": true,
+    "support11ac": true,
+    "supportMesh": true
+  },
+  "lanPortSettings": [
+    {"lanPort": "LAN1", "supportVlan": true, "localVlanEnable": true, "localVlanId": 10, "supportPoe": false, "poeOutEnable": false}
+  ],
+  "wiredUplink": {
+    "mac": "AA:BB:CC:DD:EE:01",
+    "name": "Main Gateway",
+    "port": 3
+  },
+  "radioSetting2g": {
+    "radioEnable": true,
+    "channelWidth": 5,
+    "channel": 0,
+    "freq": 0,
+    "wirelessMode": -2,
+    "txPower": 20,
+    "txPowerLevel": 2
+  },
+  "radioSetting5g": {
+    "radioEnable": true,
+    "channelWidth": 7,
+    "channel": 3,
+    "freq": 5180,
+    "wirelessMode": 5,
+    "txPower": 23,
+    "txPowerLevel": 3
+  },
+  "wp2g": {
+    "actualChannel": "1 / 2412MHz",
+    "bandWidth": "20MHz",
+    "txPower": 20,
+    "maxTxRate": 72,
+    "rxUtil": 10,
+    "txUtil": 20,
+    "interUtil": 1,
+    "rdMode": "b/g/n mixed"
+  },
+  "wp5g": {
+    "actualChannel": "36 / 5180MHz",
+    "bandWidth": "80MHz",
+    "txPower": 23,
+    "maxTxRate": 4000,
+    "rxUtil": 5,
+    "txUtil": 15,
+    "interUtil": 0,
+    "rdMode": "a/n/ac mixed"
+  }
+}

@@ -36,9 +36,9 @@ func TestEnumUnknownFallback(t *testing.T) {
 
 func TestRadioIdKeys(t *testing.T) {
 	cases := []struct {
-		id        RadioId
-		settings  string
-		status    string
+		id       RadioId
+		settings string
+		status   string
 	}{
 		{RadioIdFreq24, "radioSetting2g", "wp2g"},
 		{RadioIdFreq51, "radioSetting5g", "wp5g"},

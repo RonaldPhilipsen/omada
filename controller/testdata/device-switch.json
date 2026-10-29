@@ -1,0 +1,62 @@
+{
+  "type": "switch",
+  "mac": "AA:BB:CC:DD:EE:03",
+  "name": "Rack Switch",
+  "model": "OC200",
+  "showModel": "Omada OC200",
+  "status": 14,
+  "statusCategory": 1,
+  "ip": "192.168.1.2",
+  "uptime": "3 days",
+  "uptimeLong": 259200,
+  "cpuUtil": 4,
+  "memUtil": 22,
+  "firmwareVersion": "2.1.4",
+  "ledSetting": 2,
+  "deviceMisc": {"portNum": 8},
+  "devCap": {"poePortNum": 4, "poeSupport": true, "supportBt": false},
+  "uplink": {
+    "uplinkMac": "AA:BB:CC:DD:EE:01",
+    "name": "Main Gateway",
+    "type": "gateway",
+    "port": 1
+  },
+  "downlinkList": [
+    {"mac": "AA:BB:CC:DD:FF:01", "name": "Print Server", "model": "PS-1", "port": 5}
+  ],
+  "ports": [
+    {
+      "port": 1,
+      "name": "Port1",
+      "profileId": "prof-1",
+      "type": 1,
+      "operation": "switching",
+      "disable": false,
+      "portStatus": {
+        "linkStatus": 1,
+        "linkSpeed": 3,
+        "poe": true,
+        "poePower": 6.5,
+        "tx": 111,
+        "rx": 222,
+        "stpDiscarding": false
+      }
+    },
+    {
+      "port": 8,
+      "name": "Port8",
+      "profileId": "prof-2",
+      "type": 3,
+      "operation": "aggregating",
+      "disable": true,
+      "portStatus": {
+        "linkStatus": 0,
+        "linkSpeed": -1,
+        "poe": false,
+        "tx": 0,
+        "rx": 0,
+        "stpDiscarding": true
+      }
+    }
+  ]
+}

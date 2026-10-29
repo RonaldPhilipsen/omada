@@ -79,6 +79,53 @@ func mapPtrInt(m map[string]any, key string) *int {
 	return nil
 }
 
+// mapPtrStr returns a pointer to the string at key, or nil when absent.
+func mapPtrStr(m map[string]any, key string) *string {
+	if m == nil {
+		return nil
+	}
+	if v, ok := m[key].(string); ok {
+		return &v
+	}
+	return nil
+}
+
+// mapPtrFloat returns a pointer to the numeric value at key, or nil when absent.
+func mapPtrFloat(m map[string]any, key string) *float64 {
+	if m == nil {
+		return nil
+	}
+	switch v := m[key].(type) {
+	case float64:
+		return &v
+	case int:
+		f := float64(v)
+		return &f
+	case int64:
+		f := float64(v)
+		return &f
+	}
+	return nil
+}
+
+// mapStrList returns the list of strings at key, or nil when absent.
+func mapStrList(m map[string]any, key string) []string {
+	if m == nil {
+		return nil
+	}
+	list, ok := m[key].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // mapList returns the list at key as []any, or nil when absent.
 func mapList(m map[string]any, key string) []any {
 	if m == nil {
