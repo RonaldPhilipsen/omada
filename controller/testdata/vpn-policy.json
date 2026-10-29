@@ -1,0 +1,6 @@
+{
+  "id": "vpn-1",
+  "name": "HQ IPSec",
+  "status": true,
+  "vpnType": 2
+}
