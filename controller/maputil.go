@@ -39,13 +39,42 @@ func mapBool(m map[string]any, key string) bool {
 	return false
 }
 
-// mapMap returns the nested object at key, or nil when absent.
-func mapMap(m map[string]any, key string) map[string]any {
+// mapMap returns the nested object at key, ok=false when absent.
+func mapMap(m map[string]any, key string) (map[string]any, bool) {
+	if m == nil {
+		return nil, false
+	}
+	if v, ok := m[key].(map[string]any); ok {
+		return v, true
+	}
+	return nil, false
+}
+
+// mapPtrBool returns a pointer to the bool at key, or nil when absent.
+func mapPtrBool(m map[string]any, key string) *bool {
 	if m == nil {
 		return nil
 	}
-	if v, ok := m[key].(map[string]any); ok {
-		return v
+	if v, ok := m[key].(bool); ok {
+		return &v
+	}
+	return nil
+}
+
+// mapPtrInt returns a pointer to the numeric value at key, or nil when absent.
+func mapPtrInt(m map[string]any, key string) *int {
+	if m == nil {
+		return nil
+	}
+	switch v := m[key].(type) {
+	case float64:
+		n := int(v)
+		return &n
+	case int:
+		return &v
+	case int64:
+		n := int(v)
+		return &n
 	}
 	return nil
 }

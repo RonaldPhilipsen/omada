@@ -1,0 +1,12 @@
+{
+  "errorCode": 0,
+  "controllerVer": "6.2.10.18",
+  "omadacId": "abc",
+  "supportApp": true,
+  "mspMode": false,
+  "configured": true,
+  "type": 1,
+  "apiVer": "2",
+  "omadacCategory": "SDN",
+  "omadaCloudUrl": "https://tplinkcloud.com"
+}
