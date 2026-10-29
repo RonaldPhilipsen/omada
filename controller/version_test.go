@@ -5,7 +5,10 @@ import (
 )
 
 func TestVersionCompare(t *testing.T) {
-	cases := []struct{ a, b string; want int }{
+	cases := []struct {
+		a, b string
+		want int
+	}{
 		{"5.1.0", "5.1.0", 0},
 		{"5", "5.0.1", -1},
 		{"6", "5.20", 1},

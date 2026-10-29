@@ -24,13 +24,13 @@ type conn struct {
 	password string
 	client   *http.Client
 
-	authMu     sync.Mutex
+	authMu       sync.Mutex
 	controllerID string
-	version    string
-	csrf       string
-	lastLogon  time.Time
-	jar        *permissiveJar
-	now        func() time.Time
+	version      string
+	csrf         string
+	lastLogon    time.Time
+	jar          *permissiveJar
+	now          func() time.Time
 }
 
 // newConn normalizes the controller URL: a missing scheme becomes https://,
