@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -201,7 +202,7 @@ func (c *conn) requestEndpoint(ctx context.Context, method, api, endpoint, site 
 // The caller supplies the csrf token to send (a snapshot taken under authMu);
 // do itself never touches shared auth state.
 func (c *conn) do(ctx context.Context, method, u string, query url.Values, body any, csrf string) (map[string]any, error) {
-	var reader *bytes.Reader
+	var reader io.Reader
 	if body != nil {
 		payload, err := json.Marshal(body)
 		if err != nil {
@@ -228,6 +229,44 @@ func (c *conn) do(ctx context.Context, method, u string, query url.Values, body 
 		req.Header.Set("Origin", c.base)
 	}
 
+	return c.perform(ctx, req)
+}
+
+// doMultipart performs a multipart form-data request and unwraps the Omada
+// response envelope. The caller supplies the csrf token to send (a snapshot
+// taken under authMu); doMultipart itself never touches shared auth state.
+func (c *conn) doMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, csrf string) (map[string]any, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	for name, value := range fields {
+		w, err := mw.CreateFormField(name)
+		if err != nil {
+			return nil, fmt.Errorf("build multipart form: %w", err)
+		}
+		if _, err := io.WriteString(w, value); err != nil {
+			return nil, fmt.Errorf("build multipart form: %w", err)
+		}
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, method, u, &buf)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBadControllerURL, err)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	if len(query) > 0 {
+		req.URL.RawQuery = query.Encode()
+	}
+	if csrf != "" {
+		req.Header.Set("Csrf-Token", csrf)
+		req.Header.Set("Omada-Request-Source", "web-local")
+		req.Header.Set("Referer", c.base+"/")
+		req.Header.Set("Origin", c.base)
+	}
+	return c.perform(ctx, req)
+}
+
+// perform performs a single HTTP request and unwraps the Omada response envelope.
+func (c *conn) perform(ctx context.Context, req *http.Request) (map[string]any, error) {
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrConnectionFailed, err)
