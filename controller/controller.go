@@ -222,12 +222,6 @@ func (cl *Controller) csrfToken() string {
 	return cl.c.csrf
 }
 
-// SiteClient is the site-scoped API handle. Connection lifecycle belongs to the Controller.
-type SiteClient struct {
-	c    *conn
-	site string
-}
-
 // UpdateSection identifies the hardware or software half of a firmware update.
 type UpdateSection string
 

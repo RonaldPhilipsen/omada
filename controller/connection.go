@@ -198,6 +198,50 @@ func (c *conn) requestEndpoint(ctx context.Context, method, api, endpoint, site 
 	return c.do(ctx, method, u, query, body, csrf)
 }
 
+// openapiRequest performs an authenticated OpenAPI-versioned request, logging
+// in (and re-logging in once, on auth-class failures) as needed. The URL is
+// built under authMu after the login decision so a concurrent first request
+// can never race on an empty controllerID.
+func (c *conn) openapiRequest(ctx context.Context, method, version, endpoint, site string, query url.Values, body any) (map[string]any, error) {
+	c.authMu.Lock()
+	ok, err := c.checkLogin(ctx)
+	if err == nil && !ok {
+		_, err = c.login(ctx)
+	}
+	var u string
+	csrf := ""
+	if err == nil {
+		if site != "" {
+			endpoint = "sites/" + site + "/" + endpoint
+		}
+		u = c.base + "/openapi/" + version + "/" + c.controllerID + "/" + endpoint
+		csrf = c.csrf
+	}
+	c.authMu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.do(ctx, method, u, query, body, csrf)
+	if err == nil {
+		return res, nil
+	}
+	if !errors.Is(err, ErrLoginFailed) && !errors.Is(err, ErrLoginSessionClosed) {
+		return nil, err
+	}
+	c.authMu.Lock()
+	_, loginErr := c.login(ctx)
+	var retryCSRF string
+	if loginErr == nil {
+		retryCSRF = c.csrf
+	}
+	c.authMu.Unlock()
+	if loginErr != nil {
+		return nil, loginErr
+	}
+	return c.do(ctx, method, u, query, body, retryCSRF)
+}
+
 // do performs a single HTTP request and unwraps the Omada response envelope.
 // The caller supplies the csrf token to send (a snapshot taken under authMu);
 // do itself never touches shared auth state.

@@ -103,6 +103,24 @@ func (c *conn) pagesOpenAPIPost(ctx context.Context, api, endpoint, site string,
 	})
 }
 
+// pagesOpenAPI collects all pages of an OpenAPI versioned POST endpoint using
+// page/pageSize in the JSON body.
+func (c *conn) pagesOpenAPI(ctx context.Context, version, endpoint, site string, body map[string]any) ([]map[string]any, error) {
+	return c.collectPages(ctx, func(page int) (pageOutcome, error) {
+		b := make(map[string]any, len(body)+2)
+		for k, v := range body {
+			b[k] = v
+		}
+		b["page"] = page
+		b["pageSize"] = pageSize
+		res, err := c.openapiRequest(ctx, "POST", version, endpoint, site, nil, b)
+		if err != nil {
+			return pageOutcome{}, err
+		}
+		return outcomeFrom(res, pageSize)
+	})
+}
+
 // pagesOpenAPIGet collects all pages of an OpenAPI GET endpoint using
 // page/pageSize query parameters.
 func (c *conn) pagesOpenAPIGet(ctx context.Context, api, endpoint, site string, params url.Values) ([]map[string]any, error) {
