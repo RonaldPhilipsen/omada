@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 )
 
 // Controller is the controller-level API facade. Controller-scoped operations
@@ -17,7 +19,7 @@ type Controller struct {
 // Option customizes a Controller.
 type Option func(*options)
 
-// options collects the resolved Client options.
+// options collects the resolved models.Client options.
 type options struct {
 	httpClient         *http.Client
 	timeout            time.Duration
@@ -79,64 +81,64 @@ func (cl *Controller) url(api, endpoint, site string) string {
 }
 
 // Sites lists the sites the current user can administer.
-func (cl *Controller) Sites(ctx context.Context) ([]Site, error) {
+func (cl *Controller) Sites(ctx context.Context) ([]models.Site, error) {
 	m, err := cl.c.requestEndpoint(ctx, "GET", "v2", "users/current", "", nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	priv, ok := mapMap(m, "privilege")
+	priv, ok := models.MapMap(m, "privilege")
 	if !ok {
 		return nil, fmt.Errorf("unexpected sites response: %v", m)
 	}
-	entries := mapList(priv, "sites")
-	sites := make([]Site, 0, len(entries))
+	entries := models.MapList(priv, "sites")
+	sites := make([]models.Site, 0, len(entries))
 	for _, entry := range entries {
 		sm, ok := entry.(map[string]any)
 		if !ok {
 			continue
 		}
-		sites = append(sites, Site{Name: mapStr(sm, "name"), ID: mapStr(sm, "key")})
+		sites = append(sites, models.Site{Name: models.MapStr(sm, "name"), ID: models.MapStr(sm, "key")})
 	}
 	return sites, nil
 }
 
 // Site returns the site with the given controller site ID.
-func (cl *Controller) Site(ctx context.Context, siteID string) (Site, error) {
+func (cl *Controller) Site(ctx context.Context, siteID string) (models.Site, error) {
 	if siteID == "" {
-		return Site{}, &ValidationError{Msg: "site ID must not be empty"}
+		return models.Site{}, &models.ValidationError{Msg: "site ID must not be empty"}
 	}
 	m, err := cl.c.siteInfo(ctx, siteID)
 	if err != nil {
-		return Site{}, err
+		return models.Site{}, err
 	}
-	return Site{Name: mapStr(m, "name"), ID: mapStr(m, "id")}, nil
+	return models.Site{Name: models.MapStr(m, "name"), ID: models.MapStr(m, "id")}, nil
 }
 
 // SiteByName resolves a site by display name.
-func (cl *Controller) SiteByName(ctx context.Context, name string) (Site, error) {
+func (cl *Controller) SiteByName(ctx context.Context, name string) (models.Site, error) {
 	sites, err := cl.Sites(ctx)
 	if err != nil {
-		return Site{}, err
+		return models.Site{}, err
 	}
 	for _, s := range sites {
 		if s.Name == name {
 			return s, nil
 		}
 	}
-	return Site{}, fmt.Errorf("%w: site %q", ErrSiteNotFound, name)
+	return models.Site{}, fmt.Errorf("%w: site %q", models.ErrSiteNotFound, name)
 }
 
-// ControllerInfo fetches unauthenticated controller diagnostic information.
-func (cl *Controller) ControllerInfo(ctx context.Context) (ControllerInfo, error) {
+// models.ControllerInfo fetches unauthenticated controller diagnostic information.
+func (cl *Controller) ControllerInfo(ctx context.Context) (models.ControllerInfo, error) {
 	m, err := cl.c.controllerInfo(ctx)
 	if err != nil {
-		return ControllerInfo{}, err
+		return models.ControllerInfo{}, err
 	}
-	return NewControllerInfo(m), nil
+	return models.NewControllerInfo(m), nil
 }
 
 // ControllerVersion returns the controller software version.
-func (cl *Controller) ControllerVersion(ctx context.Context) (Version, error) {
+func (cl *Controller) ControllerVersion(ctx context.Context) (models.Version, error) {
 	return cl.c.controllerVersion(ctx)
 }
 
@@ -155,7 +157,7 @@ func (cl *Controller) Shutdown(ctx context.Context) error {
 // InstallControllerFirmware installs controller firmware to the given target version.
 func (cl *Controller) InstallControllerFirmware(ctx context.Context, targetVersion string) error {
 	if targetVersion == "" {
-		return &ValidationError{Msg: "target version must not be empty"}
+		return &models.ValidationError{Msg: "target version must not be empty"}
 	}
 	body := map[string]any{"targetVersion": targetVersion}
 	_, err := cl.c.requestEndpoint(ctx, "POST", "v2", "cmd/upgradeFirmware", "", nil, body)
@@ -163,12 +165,12 @@ func (cl *Controller) InstallControllerFirmware(ctx context.Context, targetVersi
 }
 
 // GetControllerUpgradeStatus returns the status of an ongoing hardware controller firmware upgrade.
-func (cl *Controller) GetControllerUpgradeStatus(ctx context.Context) (*HardwareUpgradeStatus, error) {
+func (cl *Controller) GetControllerUpgradeStatus(ctx context.Context) (*models.HardwareUpgradeStatus, error) {
 	m, err := cl.c.requestEndpoint(ctx, "GET", "v2", "maintenance/hardware/upgradeStatus", "", nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	status := NewHardwareUpgradeStatus(m)
+	status := models.NewHardwareUpgradeStatus(m)
 	return &status, nil
 }
 
@@ -181,20 +183,20 @@ func (cl *Controller) SiteClient(ctx context.Context, siteID string) (*SiteClien
 }
 
 // FirmwareUpdates checks for controller firmware updates.
-func (cl *Controller) FirmwareUpdates(ctx context.Context) (ControllerUpdateInfo, error) {
+func (cl *Controller) FirmwareUpdates(ctx context.Context) (models.ControllerUpdateInfo, error) {
 	version, err := cl.ControllerVersion(ctx)
 	if err != nil {
-		return ControllerUpdateInfo{}, err
+		return models.ControllerUpdateInfo{}, err
 	}
 	endpoint := "controller/notification/updateInfo"
-	if version.Compare(ParseVersionMust("6.3")) >= 0 {
+	if version.Compare(models.ParseVersionMust("6.3")) >= 0 {
 		endpoint = "maintenance/software/channelUpdate"
 	}
 	m, err := cl.c.requestEndpoint(ctx, "GET", "v2", endpoint, "", nil, nil)
 	if err != nil {
-		return ControllerUpdateInfo{}, err
+		return models.ControllerUpdateInfo{}, err
 	}
-	return NewControllerUpdateInfo(m), nil
+	return models.NewControllerUpdateInfo(m), nil
 }
 
 // UpdateFirmwareChannel selects the firmware release channel to check.
@@ -218,8 +220,8 @@ func (cl *Controller) SetCertificate(ctx context.Context, keyPEM, certPEM string
 	}
 	payload := map[string]any{
 		"certificate": map[string]any{
-			"cerId":       mapStr(m, "cerId"),
-			"cerName":     mapStr(m, "cerName"),
+			"cerId":       models.MapStr(m, "cerId"),
+			"cerName":     models.MapStr(m, "cerName"),
 			"cerType":     "PFX",
 			"enable":      true,
 			"keyPassword": "",

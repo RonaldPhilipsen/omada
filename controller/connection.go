@@ -13,9 +13,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 )
 
-// conn is the unexported HTTP + auth state shared by Client and SiteClient.
+// conn is the unexported HTTP + auth state shared by models.Client and SiteClient.
 // Data requests run concurrently; only login/re-login transitions are
 // serialized via authMu.
 type conn struct {
@@ -47,7 +49,7 @@ func newConn(rawURL, username, password string, httpClient *http.Client) (*conn,
 	base = strings.TrimRight(base, "/")
 	parsed, err := http.NewRequest("GET", base, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrBadControllerURL, err)
+		return nil, fmt.Errorf("%w: %v", models.ErrBadControllerURL, err)
 	}
 	return &conn{
 		base:     parsed.URL.String(),
@@ -80,7 +82,7 @@ func (c *conn) openapiURL(version, endpoint, site string) string {
 	return c.base + "/openapi/" + version + "/" + id + "/" + endpoint
 }
 
-var minControllerVersion = ParseVersionMust("5.1.0")
+var minControllerVersion = models.ParseVersionMust("5.1.0")
 
 // clearLoginState drops csrf state and the session cookies for this host.
 // Callers must hold authMu.
@@ -99,12 +101,12 @@ func (c *conn) login(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	version := mapStr(info, "controllerVer")
-	if v, err := ParseVersion(version); err != nil || v.Compare(minControllerVersion) < 0 {
-		return "", fmt.Errorf("%w: %q", ErrUnsupportedControllerVersion, version)
+	version := models.MapStr(info, "controllerVer")
+	if v, err := models.ParseVersion(version); err != nil || v.Compare(minControllerVersion) < 0 {
+		return "", fmt.Errorf("%w: %q", models.ErrUnsupportedControllerVersion, version)
 	}
 	c.version = version
-	c.controllerID = mapStr(info, "omadacId")
+	c.controllerID = models.MapStr(info, "omadacId")
 
 	res, err := c.do(ctx, "POST", c.base+"/"+c.controllerID+"/api/v2/login", nil, map[string]any{
 		"username": c.username,
@@ -113,7 +115,7 @@ func (c *conn) login(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	c.csrf = mapStr(res, "token")
+	c.csrf = models.MapStr(res, "token")
 	c.lastLogon = c.now()
 	return c.controllerID, nil
 }
@@ -131,12 +133,12 @@ func (c *conn) checkLogin(ctx context.Context) (bool, error) {
 	}
 	res, err := c.do(ctx, "GET", c.base+"/"+c.controllerID+"/api/v2/loginStatus", nil, nil, c.csrf)
 	if err != nil {
-		if errors.Is(err, ErrLoginFailed) || errors.Is(err, ErrLoginSessionClosed) {
+		if errors.Is(err, models.ErrLoginFailed) || errors.Is(err, models.ErrLoginSessionClosed) {
 			return false, nil
 		}
 		return false, err
 	}
-	loggedIn := mapBool(res, "login")
+	loggedIn := models.MapBool(res, "login")
 	if loggedIn {
 		c.lastLogon = c.now()
 	}
@@ -182,7 +184,7 @@ func (c *conn) requestEndpoint(ctx context.Context, method, api, endpoint, site 
 	if err == nil {
 		return res, nil
 	}
-	if !errors.Is(err, ErrLoginFailed) && !errors.Is(err, ErrLoginSessionClosed) {
+	if !errors.Is(err, models.ErrLoginFailed) && !errors.Is(err, models.ErrLoginSessionClosed) {
 		return nil, err
 	}
 	c.authMu.Lock()
@@ -226,7 +228,7 @@ func (c *conn) openapiRequest(ctx context.Context, method, version, endpoint, si
 	if err == nil {
 		return res, nil
 	}
-	if !errors.Is(err, ErrLoginFailed) && !errors.Is(err, ErrLoginSessionClosed) {
+	if !errors.Is(err, models.ErrLoginFailed) && !errors.Is(err, models.ErrLoginSessionClosed) {
 		return nil, err
 	}
 	c.authMu.Lock()
@@ -258,7 +260,7 @@ func (c *conn) do(ctx context.Context, method, u string, query url.Values, body 
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u, reader)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrBadControllerURL, err)
+		return nil, fmt.Errorf("%w: %v", models.ErrBadControllerURL, err)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -294,7 +296,7 @@ func (c *conn) doMultipart(ctx context.Context, method, u string, query url.Valu
 	mw.Close()
 	req, err := http.NewRequestWithContext(ctx, method, u, &buf)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrBadControllerURL, err)
+		return nil, fmt.Errorf("%w: %v", models.ErrBadControllerURL, err)
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	if len(query) > 0 {
@@ -313,13 +315,13 @@ func (c *conn) doMultipart(ctx context.Context, method, u string, query url.Valu
 func (c *conn) perform(ctx context.Context, req *http.Request) (map[string]any, error) {
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrConnectionFailed, err)
+		return nil, fmt.Errorf("%w: %v", models.ErrConnectionFailed, err)
 	}
 	defer resp.Body.Close()
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrConnectionFailed, err)
+		return nil, fmt.Errorf("%w: %v", models.ErrConnectionFailed, err)
 	}
 
 	isJSON := strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json")
@@ -333,16 +335,16 @@ func (c *conn) perform(ctx context.Context, req *http.Request) (map[string]any, 
 				}
 			}
 		}
-		return nil, &RequestError{Code: resp.StatusCode, Msg: "HTTP Request Error"}
+		return nil, &models.RequestError{Code: resp.StatusCode, Msg: "HTTP Request Error"}
 	}
 
 	if !isJSON {
-		return nil, ErrLoginSessionClosed
+		return nil, models.ErrLoginSessionClosed
 	}
 
 	var content map[string]any
 	if err := json.Unmarshal(raw, &content); err != nil {
-		return nil, &RequestError{Code: -30109, Msg: "Unexpected response: not a JSON object"}
+		return nil, &models.RequestError{Code: -30109, Msg: "Unexpected response: not a JSON object"}
 	}
 	if appErr := c.checkAppErrors(content); appErr != nil {
 		return nil, appErr
@@ -359,17 +361,17 @@ func (c *conn) perform(ctx context.Context, req *http.Request) (map[string]any, 
 func (c *conn) checkAppErrors(content map[string]any) error {
 	_, ok := content["errorCode"]
 	if !ok {
-		return &RequestError{Code: -30109, Msg: "Unexpected response: " + fmt.Sprint(content)}
+		return &models.RequestError{Code: -30109, Msg: "Unexpected response: " + fmt.Sprint(content)}
 	}
-	code := mapInt(content, "errorCode")
+	code := models.MapInt(content, "errorCode")
 	if code == 0 {
 		return nil
 	}
-	msg := mapStr(content, "msg")
+	msg := models.MapStr(content, "msg")
 	if code == -30109 {
-		return &RequestError{Code: -30109, Msg: msg}
+		return &models.RequestError{Code: -30109, Msg: msg}
 	}
-	return &RequestError{Code: code, Msg: msg}
+	return &models.RequestError{Code: code, Msg: msg}
 }
 
 // controllerInfo fetches unauthenticated controller diagnostics.
@@ -378,18 +380,18 @@ func (c *conn) controllerInfo(ctx context.Context) (map[string]any, error) {
 }
 
 // controllerVersion returns the controller version, fetching it if unknown.
-func (c *conn) controllerVersion(ctx context.Context) (Version, error) {
+func (c *conn) controllerVersion(ctx context.Context) (models.Version, error) {
 	c.authMu.Lock()
 	cached := c.version
 	c.authMu.Unlock()
 	if cached != "" {
-		return ParseVersion(cached)
+		return models.ParseVersion(cached)
 	}
 	info, err := c.controllerInfo(ctx)
 	if err != nil {
-		return Version{}, err
+		return models.Version{}, err
 	}
-	return ParseVersion(mapStr(info, "controllerVer"))
+	return models.ParseVersion(models.MapStr(info, "controllerVer"))
 }
 
 // siteInfo fetches a site's detail object.
@@ -401,10 +403,10 @@ func (c *conn) siteInfo(ctx context.Context, site string) (map[string]any, error
 }
 
 // siteVersion returns the site's reported version.
-func (c *conn) siteVersion(ctx context.Context, site string) (Version, error) {
+func (c *conn) siteVersion(ctx context.Context, site string) (models.Version, error) {
 	info, err := c.siteInfo(ctx, site)
 	if err != nil {
-		return Version{}, err
+		return models.Version{}, err
 	}
-	return ParseVersion(mapStr(info, "controllerVer"))
+	return models.ParseVersion(models.MapStr(info, "controllerVer"))
 }

@@ -3,41 +3,42 @@ package controller
 import (
 	"context"
 	"fmt"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/url"
 )
 
 // Gateways lists the gateways visible to the site.
-func (s *SiteClient) Gateways(ctx context.Context) ([]Gateway, error) {
+func (s *SiteClient) Gateways(ctx context.Context) ([]models.Gateway, error) {
 	entries, err := s.c.pagesV2(ctx, "gateways", s.site, url.Values{"deviceType": {"gateway"}})
 	if err != nil {
 		return nil, err
 	}
-	gateways := make([]Gateway, 0, len(entries))
+	gateways := make([]models.Gateway, 0, len(entries))
 	for _, entry := range entries {
-		gateways = append(gateways, NewGateway(entry))
+		gateways = append(gateways, models.NewGateway(entry))
 	}
 	return gateways, nil
 }
 
-// Gateway returns the gateway at the given device ID.
-func (s *SiteClient) Gateway(ctx context.Context, deviceID string) (Gateway, error) {
+// models.Gateway returns the gateway at the given device ID.
+func (s *SiteClient) Gateway(ctx context.Context, deviceID string) (models.Gateway, error) {
 	if deviceID == "" {
-		return Gateway{}, &ValidationError{Msg: "device ID must not be empty"}
+		return models.Gateway{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "gateways/"+deviceID, s.site, nil, nil)
 	if err != nil {
-		return Gateway{}, err
+		return models.Gateway{}, err
 	}
 	if len(m) == 0 {
-		return Gateway{}, fmt.Errorf("%w: device %q", ErrInvalidDevice, deviceID)
+		return models.Gateway{}, fmt.Errorf("%w: device %q", models.ErrInvalidDevice, deviceID)
 	}
-	return NewGateway(m), nil
+	return models.NewGateway(m), nil
 }
 
 // GetGatewayPort returns the configuration of a single gateway port.
-func (s *SiteClient) GetGatewayPort(ctx context.Context, deviceID string, portIndex int) (*GatewayPortConfig, error) {
+func (s *SiteClient) GetGatewayPort(ctx context.Context, deviceID string, portIndex int) (*models.GatewayPortConfig, error) {
 	if deviceID == "" {
-		return nil, &ValidationError{Msg: "device ID must not be empty"}
+		return nil, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	gw, err := s.Gateway(ctx, deviceID)
 	if err != nil {
@@ -49,14 +50,14 @@ func (s *SiteClient) GetGatewayPort(ctx context.Context, deviceID string, portIn
 			return &cfg, nil
 		}
 	}
-	return nil, &ValidationError{Msg: "gateway port not found"}
+	return nil, &models.ValidationError{Msg: "gateway port not found"}
 }
 
 // SetGatewayWanPortConnectState connects or disconnects a gateway WAN port
 // and returns the resulting port status.
-func (s *SiteClient) SetGatewayWanPortConnectState(ctx context.Context, deviceID string, portIndex int, connect bool) (GatewayPortStatus, error) {
+func (s *SiteClient) SetGatewayWanPortConnectState(ctx context.Context, deviceID string, portIndex int, connect bool) (models.GatewayPortStatus, error) {
 	if deviceID == "" {
-		return GatewayPortStatus{}, &ValidationError{Msg: "device ID must not be empty"}
+		return models.GatewayPortStatus{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	operation := 0
 	if connect {
@@ -65,9 +66,9 @@ func (s *SiteClient) SetGatewayWanPortConnectState(ctx context.Context, deviceID
 	body := map[string]any{"portId": portIndex, "operation": operation}
 	m, err := s.c.requestEndpoint(ctx, "POST", "v2", "gateways/"+deviceID+"/internetState", s.site, nil, body)
 	if err != nil {
-		return GatewayPortStatus{}, err
+		return models.GatewayPortStatus{}, err
 	}
-	return NewGatewayPortStatus(m), nil
+	return models.NewGatewayPortStatus(m), nil
 }
 
 // GatewayPortSettings is the effective configuration of a gateway port.
@@ -81,35 +82,37 @@ func NewGatewayPortSettings(data map[string]any) GatewayPortSettings {
 }
 
 // Index is the port number.
-func (p GatewayPortSettings) Index() int { return mapInt(p.data, "port") }
+func (p GatewayPortSettings) Index() int { return models.MapInt(p.data, "port") }
 
 // Type is the port type.
-func (p GatewayPortSettings) Type() GatewayPortType { return GatewayPortType(mapInt(p.data, "type")) }
+func (p GatewayPortSettings) Type() models.GatewayPortType {
+	return models.GatewayPortType(models.MapInt(p.data, "type"))
+}
 
 // PoE is the PoE mode of the port.
-func (p GatewayPortSettings) PoE() PoEMode {
-	if v := mapPtrInt(p.data, "poe"); v != nil {
-		return PoEMode(*v)
+func (p GatewayPortSettings) PoE() models.PoEMode {
+	if v := models.MapPtrInt(p.data, "poe"); v != nil {
+		return models.PoEMode(*v)
 	}
-	return PoEModeNone
+	return models.PoEModeNone
 }
 
 // Speed is the port speed.
-func (p GatewayPortSettings) Speed() string { return mapStr(p.data, "speed") }
+func (p GatewayPortSettings) Speed() string { return models.MapStr(p.data, "speed") }
 
 // Enabled reports whether the port is enabled.
-func (p GatewayPortSettings) Enabled() bool { return mapBool(p.data, "enable") }
+func (p GatewayPortSettings) Enabled() bool { return models.MapBool(p.data, "enable") }
 
 // GatewayPorts returns the port settings of the gateway.
 func (s *SiteClient) GatewayPorts(ctx context.Context, deviceID string) ([]GatewayPortSettings, error) {
 	if deviceID == "" {
-		return nil, &ValidationError{Msg: "device ID must not be empty"}
+		return nil, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "gateways/"+deviceID+"/portConfig", s.site, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	entries := mapList(m, "data")
+	entries := models.MapList(m, "data")
 	ports := make([]GatewayPortSettings, 0, len(entries))
 	for _, entry := range entries {
 		if pm, ok := entry.(map[string]any); ok {
@@ -121,9 +124,9 @@ func (s *SiteClient) GatewayPorts(ctx context.Context, deviceID string) ([]Gatew
 
 // SetGatewayPortSettings changes the configuration of a gateway port, merging
 // the requested settings into the current port configuration.
-func (s *SiteClient) SetGatewayPortSettings(ctx context.Context, deviceID string, portIndex int, poe PoEMode, speed string, enabled *bool) error {
+func (s *SiteClient) SetGatewayPortSettings(ctx context.Context, deviceID string, portIndex int, poe models.PoEMode, speed string, enabled *bool) error {
 	if deviceID == "" {
-		return &ValidationError{Msg: "device ID must not be empty"}
+		return &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	ports, err := s.GatewayPorts(ctx, deviceID)
 	if err != nil {
@@ -137,10 +140,10 @@ func (s *SiteClient) SetGatewayPortSettings(ctx context.Context, deviceID string
 		}
 	}
 	if target == nil {
-		return fmt.Errorf("%w: port %d not found", ErrInvalidDevice, portIndex)
+		return fmt.Errorf("%w: port %d not found", models.ErrInvalidDevice, portIndex)
 	}
 	if enabled == nil && poe == target.PoE() && speed == target.Speed() {
-		return &ValidationError{Msg: "no gateway port changes requested"}
+		return &models.ValidationError{Msg: "no gateway port changes requested"}
 	}
 	merged := map[string]any{
 		"port":  portIndex,
@@ -156,9 +159,9 @@ func (s *SiteClient) SetGatewayPortSettings(ctx context.Context, deviceID string
 }
 
 // SetGatewayPoE sets the PoE state of a gateway port.
-func (s *SiteClient) SetGatewayPoE(ctx context.Context, deviceID string, portIndex int, state PoEMode) error {
+func (s *SiteClient) SetGatewayPoE(ctx context.Context, deviceID string, portIndex int, state models.PoEMode) error {
 	if deviceID == "" {
-		return &ValidationError{Msg: "device ID must not be empty"}
+		return &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	body := map[string]any{
 		"port": portIndex,

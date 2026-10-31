@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
@@ -44,11 +45,11 @@ func TestAccessPointEmptyID(t *testing.T) {
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
 	if _, err := sc.AccessPoint(context.Background(), ""); err == nil {
-		t.Fatal("AccessPoint() expected error for empty device ID")
+		t.Fatal("models.AccessPoint() expected error for empty device ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("AccessPoint() error = %v, want *ValidationError", err)
+			t.Fatalf("models.AccessPoint() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -155,9 +156,9 @@ func TestApRadioSettingsMiss(t *testing.T) {
 	if err == nil {
 		t.Fatal("ApRadioSettings() expected error for unknown radio")
 	}
-	var verr *ValidationError
+	var verr *models.ValidationError
 	if !errors.As(err, &verr) {
-		t.Fatalf("ApRadioSettings() error = %v, want *ValidationError", err)
+		t.Fatalf("ApRadioSettings() error = %v, want *models.ValidationError", err)
 	}
 }
 
@@ -169,7 +170,7 @@ func TestSetApRadioEnabled(t *testing.T) {
 			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"type": "ap", "mac": "AA:BB:CC:DD:EE:02", "status": 14, "statusCategory": 1,
 				"radioSetting2g": map[string]any{
-					"radioEnable": true, "channelWidth": float64(ChannelWidthWidth80), "channel": float64(1),
+					"radioEnable": true, "channelWidth": float64(models.ChannelWidthWidth80), "channel": float64(1),
 					"freq": float64(2412), "wirelessMode": float64(-2), "txPower": float64(20), "txPowerLevel": float64(2),
 				},
 			}})
@@ -201,7 +202,7 @@ func TestSetApRadioChannelMerges(t *testing.T) {
 			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"type": "ap", "mac": "AA:BB:CC:DD:EE:02", "status": 14, "statusCategory": 1,
 				"radioSetting2g": map[string]any{
-					"radioEnable": true, "channelWidth": float64(ChannelWidthWidth80), "channel": float64(1),
+					"radioEnable": true, "channelWidth": float64(models.ChannelWidthWidth80), "channel": float64(1),
 					"freq": float64(2412), "wirelessMode": float64(-2), "txPower": float64(20), "txPowerLevel": float64(2),
 				},
 			}})
@@ -216,7 +217,7 @@ func TestSetApRadioChannelMerges(t *testing.T) {
 		}
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
-	if err := sc.SetApRadioChannel(context.Background(), "AA:BB:CC:DD:EE:02", 0, 6, ChannelWidthWidth40); err != nil {
+	if err := sc.SetApRadioChannel(context.Background(), "AA:BB:CC:DD:EE:02", 0, 6, models.ChannelWidthWidth40); err != nil {
 		t.Fatalf("SetApRadioChannel() error = %v", err)
 	}
 	if gotBody == nil {
@@ -225,8 +226,8 @@ func TestSetApRadioChannelMerges(t *testing.T) {
 	if gotBody["channel"] != float64(6) {
 		t.Errorf("SetApRadioChannel body channel = %v, want 6", gotBody["channel"])
 	}
-	if gotBody["channelWidth"] != float64(int(ChannelWidthWidth40)) {
-		t.Errorf("SetApRadioChannel body channelWidth = %v, want %v", gotBody["channelWidth"], int(ChannelWidthWidth40))
+	if gotBody["channelWidth"] != float64(int(models.ChannelWidthWidth40)) {
+		t.Errorf("SetApRadioChannel body channelWidth = %v, want %v", gotBody["channelWidth"], int(models.ChannelWidthWidth40))
 	}
 	if gotBody["freq"] != float64(2412) {
 		t.Errorf("SetApRadioChannel body freq = %v, want 2412 (original preserved)", gotBody["freq"])

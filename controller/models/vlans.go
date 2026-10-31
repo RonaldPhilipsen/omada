@@ -1,4 +1,4 @@
-package controller
+package models
 
 import (
 	"fmt"
@@ -230,6 +230,11 @@ func NewVlanCreate(name string, vlanID int) (VlanCreate, error) {
 	return VlanCreate{name: trimmed, vlanID: id}, nil
 }
 
+// VLANID is the validated VLAN ID.
+func (v VlanCreate) VLANID() int {
+	return v.vlanID
+}
+
 // Payload is the range-string create payload used by the installed editor.
 func (v VlanCreate) Payload() map[string]any {
 	return map[string]any{
@@ -278,6 +283,16 @@ func NewVlanUpdate(name *string, vlanID *int) (VlanUpdate, error) {
 		update.vlanID = &id
 	}
 	return update, nil
+}
+
+// Name is the validated name change, or nil when unchanged.
+func (v VlanUpdate) Name() *string {
+	return v.name
+}
+
+// VLANID is the validated VLAN ID change, or nil when unchanged.
+func (v VlanUpdate) VLANID() *int {
+	return v.vlanID
 }
 
 // Payload merges the verified writable settings of network into a

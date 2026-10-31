@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/url"
 	"strconv"
+
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 )
 
 const (
@@ -46,13 +48,13 @@ func (c *conn) collectPages(ctx context.Context, fetch func(page int) (pageOutco
 }
 
 func outcomeFrom(data map[string]any, requestedSize int) (pageOutcome, error) {
-	entries := make([]map[string]any, 0, len(mapList(data, "data")))
-	for _, item := range mapList(data, "data") {
+	entries := make([]map[string]any, 0, len(models.MapList(data, "data")))
+	for _, item := range models.MapList(data, "data") {
 		if m, ok := item.(map[string]any); ok {
 			entries = append(entries, m)
 		}
 	}
-	size := mapInt(data, "currentSize")
+	size := models.MapInt(data, "currentSize")
 	if size <= 0 {
 		size = requestedSize
 	}
@@ -60,7 +62,7 @@ func outcomeFrom(data map[string]any, requestedSize int) (pageOutcome, error) {
 	out.entries = entries
 	out.size = size
 	if _, ok := data["totalRows"]; ok {
-		out.totalRows = int64(mapInt(data, "totalRows"))
+		out.totalRows = int64(models.MapInt(data, "totalRows"))
 		out.hasTotal = true
 	}
 	return out, nil

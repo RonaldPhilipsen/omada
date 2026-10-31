@@ -1,4 +1,4 @@
-package controller
+package models
 
 // This file ports the VPN policy models from upstream tplink_omada_client
 // vpn.py.
@@ -84,24 +84,24 @@ func NewVpnPolicy(category VpnCategory, data map[string]any) VpnPolicy {
 func (p VpnPolicy) Category() VpnCategory { return p.category }
 
 // PolicyID is the controller-side id, used as {id} in the status PATCH.
-func (p VpnPolicy) PolicyID() string { return mapStr(p.data, "id") }
+func (p VpnPolicy) PolicyID() string { return MapStr(p.data, "id") }
 
 // Name is the user-defined policy name, falling back to the id.
 func (p VpnPolicy) Name() string {
-	if n := mapStr(p.data, "name"); n != "" {
+	if n := MapStr(p.data, "name"); n != "" {
 		return n
 	}
 	return p.PolicyID()
 }
 
 // Enabled is the current enabled state (the "status" flag).
-func (p VpnPolicy) Enabled() bool { return mapBool(p.data, "status") }
+func (p VpnPolicy) Enabled() bool { return MapBool(p.data, "status") }
 
 // VpnType is the VPN protocol type. Unrecognized codes map to Unknown,
 // mirroring the upstream _missing_ behavior.
 func (p VpnPolicy) VpnType() VpnType {
 	v := VpnTypeUnknown
-	if n := mapPtrInt(p.data, "vpnType"); n != nil {
+	if n := MapPtrInt(p.data, "vpnType"); n != nil {
 		v = VpnType(*n)
 	}
 	if _, ok := vpnTypeNames[v]; !ok {

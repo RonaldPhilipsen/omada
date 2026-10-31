@@ -3,54 +3,55 @@ package controller
 import (
 	"context"
 	"fmt"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/url"
 	"strconv"
 	"strings"
 )
 
 // Switches lists the switches visible to the site.
-func (s *SiteClient) Switches(ctx context.Context) ([]Switch, error) {
+func (s *SiteClient) Switches(ctx context.Context) ([]models.Switch, error) {
 	entries, err := s.c.pagesV2(ctx, "switches", s.site, url.Values{"deviceType": {"switch"}})
 	if err != nil {
 		return nil, err
 	}
-	switches := make([]Switch, 0, len(entries))
+	switches := make([]models.Switch, 0, len(entries))
 	for _, entry := range entries {
-		switches = append(switches, NewSwitch(entry))
+		switches = append(switches, models.NewSwitch(entry))
 	}
 	return switches, nil
 }
 
-// Switch returns the switch at the given device ID.
-func (s *SiteClient) Switch(ctx context.Context, deviceID string) (Switch, error) {
+// models.Switch returns the switch at the given device ID.
+func (s *SiteClient) Switch(ctx context.Context, deviceID string) (models.Switch, error) {
 	if deviceID == "" {
-		return Switch{}, &ValidationError{Msg: "device ID must not be empty"}
+		return models.Switch{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "switches/"+deviceID, s.site, nil, nil)
 	if err != nil {
-		return Switch{}, err
+		return models.Switch{}, err
 	}
 	if len(m) == 0 {
-		return Switch{}, fmt.Errorf("%w: device %q", ErrInvalidDevice, deviceID)
+		return models.Switch{}, fmt.Errorf("%w: device %q", models.ErrInvalidDevice, deviceID)
 	}
-	return NewSwitch(m), nil
+	return models.NewSwitch(m), nil
 }
 
 // SwitchesByMAC returns the switches matching the given MACs.
-func (s *SiteClient) SwitchesByMAC(ctx context.Context, macs []string) ([]Switch, error) {
+func (s *SiteClient) SwitchesByMAC(ctx context.Context, macs []string) ([]models.Switch, error) {
 	if len(macs) == 0 {
-		return nil, &ValidationError{Msg: "MAC list must not be empty"}
+		return nil, &models.ValidationError{Msg: "MAC list must not be empty"}
 	}
 	joined := strings.Join(macs, ",")
 	m, err := s.c.openapiRequest(ctx, "GET", "v2", "switches", s.site, url.Values{"mac": {joined}}, nil)
 	if err != nil {
 		return nil, err
 	}
-	entries := mapList(m, "data")
-	switches := make([]Switch, 0, len(entries))
+	entries := models.MapList(m, "data")
+	switches := make([]models.Switch, 0, len(entries))
 	for _, entry := range entries {
 		if sm, ok := entry.(map[string]any); ok {
-			switches = append(switches, NewSwitch(sm))
+			switches = append(switches, models.NewSwitch(sm))
 		}
 	}
 	return switches, nil
@@ -67,27 +68,29 @@ func NewSwitchPortSettings(data map[string]any) SwitchPortSettings {
 }
 
 // Index is the port number.
-func (p SwitchPortSettings) Index() int { return mapInt(p.data, "port") }
+func (p SwitchPortSettings) Index() int { return models.MapInt(p.data, "port") }
 
 // Name is the port name.
-func (p SwitchPortSettings) Name() string { return mapStr(p.data, "name") }
+func (p SwitchPortSettings) Name() string { return models.MapStr(p.data, "name") }
 
 // Mode is the port mode.
-func (p SwitchPortSettings) Mode() PortType { return PortType(mapInt(p.data, "type")) }
+func (p SwitchPortSettings) Mode() models.PortType {
+	return models.PortType(models.MapInt(p.data, "type"))
+}
 
 // PVID is the port PVID.
-func (p SwitchPortSettings) PVID() int { return mapInt(p.data, "pvid") }
+func (p SwitchPortSettings) PVID() int { return models.MapInt(p.data, "pvid") }
 
 // SwitchPorts returns the port settings of the switch.
 func (s *SiteClient) SwitchPorts(ctx context.Context, deviceID string) ([]SwitchPortSettings, error) {
 	if deviceID == "" {
-		return nil, &ValidationError{Msg: "device ID must not be empty"}
+		return nil, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "switches/"+deviceID+"/portConfig", s.site, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	entries := mapList(m, "data")
+	entries := models.MapList(m, "data")
 	settings := make([]SwitchPortSettings, 0, len(entries))
 	for _, entry := range entries {
 		if pm, ok := entry.(map[string]any); ok {
@@ -98,32 +101,32 @@ func (s *SiteClient) SwitchPorts(ctx context.Context, deviceID string) ([]Switch
 }
 
 // GetSwitchPort returns the details of a single switch port.
-func (s *SiteClient) GetSwitchPort(ctx context.Context, deviceID string, portIndex int) (PortDetails, error) {
+func (s *SiteClient) GetSwitchPort(ctx context.Context, deviceID string, portIndex int) (models.PortDetails, error) {
 	if deviceID == "" {
-		return PortDetails{}, &ValidationError{Msg: "device ID must not be empty"}
+		return models.PortDetails{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "switches/"+deviceID+"/ports/"+strconv.Itoa(portIndex), s.site, nil, nil)
 	if err != nil {
-		return PortDetails{}, err
+		return models.PortDetails{}, err
 	}
 	if len(m) == 0 {
-		return PortDetails{}, fmt.Errorf("%w: port %d not found", ErrInvalidDevice, portIndex)
+		return models.PortDetails{}, fmt.Errorf("%w: port %d not found", models.ErrInvalidDevice, portIndex)
 	}
-	return NewPortDetails(m), nil
+	return models.NewPortDetails(m), nil
 }
 
 // SetSwitchPortSettings changes the configuration of a switch port, merging
 // the requested settings into the current port configuration.
-func (s *SiteClient) SetSwitchPortSettings(ctx context.Context, deviceID string, portIndex int, mode PortType, pvid int, tagged []int, untagged *int, poe *bool) error {
+func (s *SiteClient) SetSwitchPortSettings(ctx context.Context, deviceID string, portIndex int, mode models.PortType, pvid int, tagged []int, untagged *int, poe *bool) error {
 	if deviceID == "" {
-		return &ValidationError{Msg: "device ID must not be empty"}
+		return &models.ValidationError{Msg: "device ID must not be empty"}
 	}
 	version, err := s.SiteVersion(ctx)
 	if err != nil {
 		return err
 	}
 	endpoint := "switches/" + deviceID + "/portConfig"
-	if version.Compare(ParseVersionMust("6")) < 0 {
+	if version.Compare(models.ParseVersionMust("6")) < 0 {
 		endpoint = "switch/" + deviceID + "/portConfig"
 	}
 	current, err := s.SwitchPorts(ctx, deviceID)
@@ -138,10 +141,10 @@ func (s *SiteClient) SetSwitchPortSettings(ctx context.Context, deviceID string,
 		}
 	}
 	if target == nil {
-		return fmt.Errorf("%w: port %d not found", ErrInvalidDevice, portIndex)
+		return fmt.Errorf("%w: port %d not found", models.ErrInvalidDevice, portIndex)
 	}
 	if untagged == nil && poe == nil && len(tagged) == 0 && target.Mode() == mode && target.PVID() == pvid {
-		return &ValidationError{Msg: "no switch port changes requested"}
+		return &models.ValidationError{Msg: "no switch port changes requested"}
 	}
 	merged := map[string]any{
 		"port":        portIndex,
@@ -166,37 +169,37 @@ type PortProfileOverrides struct {
 }
 
 // PortProfiles lists the port profiles visible to the site.
-func (s *SiteClient) PortProfiles(ctx context.Context) ([]PortProfile, error) {
+func (s *SiteClient) PortProfiles(ctx context.Context) ([]models.PortProfile, error) {
 	entries, err := s.c.pagesV2(ctx, "portProfiles", s.site, url.Values{})
 	if err != nil {
 		return nil, err
 	}
-	profiles := make([]PortProfile, 0, len(entries))
+	profiles := make([]models.PortProfile, 0, len(entries))
 	for _, entry := range entries {
-		profiles = append(profiles, NewPortProfile(entry))
+		profiles = append(profiles, models.NewPortProfile(entry))
 	}
 	return profiles, nil
 }
 
-// PortProfile returns the port profile with the given ID.
-func (s *SiteClient) PortProfile(ctx context.Context, id string) (PortProfile, error) {
+// models.PortProfile returns the port profile with the given ID.
+func (s *SiteClient) PortProfile(ctx context.Context, id string) (models.PortProfile, error) {
 	if id == "" {
-		return PortProfile{}, &ValidationError{Msg: "port profile ID must not be empty"}
+		return models.PortProfile{}, &models.ValidationError{Msg: "port profile ID must not be empty"}
 	}
 	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "portProfiles/"+id, s.site, nil, nil)
 	if err != nil {
-		return PortProfile{}, err
+		return models.PortProfile{}, err
 	}
 	if len(m) == 0 {
-		return PortProfile{}, &ValidationError{Msg: "port profile not found"}
+		return models.PortProfile{}, &models.ValidationError{Msg: "port profile not found"}
 	}
-	return NewPortProfile(m), nil
+	return models.NewPortProfile(m), nil
 }
 
 // CreatePortProfile creates a port profile.
-func (s *SiteClient) CreatePortProfile(ctx context.Context, profile PortProfileOverrides) (PortProfile, error) {
+func (s *SiteClient) CreatePortProfile(ctx context.Context, profile PortProfileOverrides) (models.PortProfile, error) {
 	if profile.Name == "" {
-		return PortProfile{}, &ValidationError{Msg: "port profile name must not be empty"}
+		return models.PortProfile{}, &models.ValidationError{Msg: "port profile name must not be empty"}
 	}
 	body := map[string]any{
 		"name":  profile.Name,
@@ -206,18 +209,18 @@ func (s *SiteClient) CreatePortProfile(ctx context.Context, profile PortProfileO
 	}
 	m, err := s.c.requestEndpoint(ctx, "POST", "v2", "portProfiles", s.site, nil, body)
 	if err != nil {
-		return PortProfile{}, err
+		return models.PortProfile{}, err
 	}
 	if len(m) == 0 {
-		return PortProfile{}, &ValidationError{Msg: "port profile not found"}
+		return models.PortProfile{}, &models.ValidationError{Msg: "port profile not found"}
 	}
-	return NewPortProfile(m), nil
+	return models.NewPortProfile(m), nil
 }
 
 // UpdatePortProfile updates a port profile.
-func (s *SiteClient) UpdatePortProfile(ctx context.Context, id string, profile PortProfileOverrides) (PortProfile, error) {
+func (s *SiteClient) UpdatePortProfile(ctx context.Context, id string, profile PortProfileOverrides) (models.PortProfile, error) {
 	if id == "" {
-		return PortProfile{}, &ValidationError{Msg: "port profile ID must not be empty"}
+		return models.PortProfile{}, &models.ValidationError{Msg: "port profile ID must not be empty"}
 	}
 	body := map[string]any{}
 	if profile.Name != "" {
@@ -237,18 +240,18 @@ func (s *SiteClient) UpdatePortProfile(ctx context.Context, id string, profile P
 	}
 	m, err := s.c.requestEndpoint(ctx, "PATCH", "v2", "portProfiles/"+id, s.site, nil, body)
 	if err != nil {
-		return PortProfile{}, err
+		return models.PortProfile{}, err
 	}
 	if len(m) == 0 {
-		return PortProfile{}, &ValidationError{Msg: "port profile not found"}
+		return models.PortProfile{}, &models.ValidationError{Msg: "port profile not found"}
 	}
-	return NewPortProfile(m), nil
+	return models.NewPortProfile(m), nil
 }
 
 // DeletePortProfile deletes a port profile.
 func (s *SiteClient) DeletePortProfile(ctx context.Context, id string) error {
 	if id == "" {
-		return &ValidationError{Msg: "port profile ID must not be empty"}
+		return &models.ValidationError{Msg: "port profile ID must not be empty"}
 	}
 	_, err := s.c.requestEndpoint(ctx, "DELETE", "v2", "portProfiles/"+id, s.site, nil, nil)
 	return err
@@ -257,10 +260,10 @@ func (s *SiteClient) DeletePortProfile(ctx context.Context, id string) error {
 // ApplyPortProfile applies a port profile to the given ports.
 func (s *SiteClient) ApplyPortProfile(ctx context.Context, id string, ports []int) error {
 	if id == "" {
-		return &ValidationError{Msg: "port profile ID must not be empty"}
+		return &models.ValidationError{Msg: "port profile ID must not be empty"}
 	}
 	if len(ports) == 0 {
-		return &ValidationError{Msg: "port profile apply requires ports"}
+		return &models.ValidationError{Msg: "port profile apply requires ports"}
 	}
 	body := map[string]any{
 		"profileId":   id,

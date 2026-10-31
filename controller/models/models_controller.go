@@ -1,4 +1,4 @@
-package controller
+package models
 
 import "strings"
 
@@ -21,34 +21,34 @@ func NewControllerInfo(m map[string]any) ControllerInfo {
 func (c ControllerInfo) Raw() map[string]any { return c.raw }
 
 // ID is the controller's unique ID (omadacId).
-func (c ControllerInfo) ID() string { return mapStr(c.raw, "omadacId") }
+func (c ControllerInfo) ID() string { return MapStr(c.raw, "omadacId") }
 
 // ControllerVersion is the controller software version.
-func (c ControllerInfo) ControllerVersion() string { return mapStr(c.raw, "controllerVer") }
+func (c ControllerInfo) ControllerVersion() string { return MapStr(c.raw, "controllerVer") }
 
 // APIVersion is the controller API version, when reported.
-func (c ControllerInfo) APIVersion() string { return mapStr(c.raw, "apiVer") }
+func (c ControllerInfo) APIVersion() string { return MapStr(c.raw, "apiVer") }
 
 // Category is the controller category, when reported.
-func (c ControllerInfo) Category() string { return mapStr(c.raw, "omadacCategory") }
+func (c ControllerInfo) Category() string { return MapStr(c.raw, "omadacCategory") }
 
 // CloudURL is the Omada cloud URL, when reported.
-func (c ControllerInfo) CloudURL() string { return mapStr(c.raw, "omadaCloudUrl") }
+func (c ControllerInfo) CloudURL() string { return MapStr(c.raw, "omadaCloudUrl") }
 
 // Configured reports whether the setup wizard has been completed.
-func (c ControllerInfo) Configured() *bool { return mapPtrBool(c.raw, "configured") }
+func (c ControllerInfo) Configured() *bool { return MapPtrBool(c.raw, "configured") }
 
 // SupportApp reports whether the Omada app is supported.
-func (c ControllerInfo) SupportApp() *bool { return mapPtrBool(c.raw, "supportApp") }
+func (c ControllerInfo) SupportApp() *bool { return MapPtrBool(c.raw, "supportApp") }
 
 // RegisteredRoot reports whether the root account is registered.
-func (c ControllerInfo) RegisteredRoot() *bool { return mapPtrBool(c.raw, "registeredRoot") }
+func (c ControllerInfo) RegisteredRoot() *bool { return MapPtrBool(c.raw, "registeredRoot") }
 
 // MspMode reports whether the controller runs in MSP mode.
-func (c ControllerInfo) MspMode() *bool { return mapPtrBool(c.raw, "mspMode") }
+func (c ControllerInfo) MspMode() *bool { return MapPtrBool(c.raw, "mspMode") }
 
 // Type is the controller type code as returned by the API.
-func (c ControllerInfo) Type() *int { return mapPtrInt(c.raw, "type") }
+func (c ControllerInfo) Type() *int { return MapPtrInt(c.raw, "type") }
 
 // ControllerTypeModel wraps the anon/controllerType response.
 type ControllerTypeModel struct {
@@ -62,10 +62,10 @@ func NewControllerTypeModel(m map[string]any) ControllerTypeModel {
 func (c ControllerTypeModel) Raw() map[string]any { return c.raw }
 
 // IsSoftController reports whether this is an Omada Software Controller.
-func (c ControllerTypeModel) IsSoftController() bool { return mapBool(c.raw, "isSoftController") }
+func (c ControllerTypeModel) IsSoftController() bool { return MapBool(c.raw, "isSoftController") }
 
 // CombinedGateway reports whether the controller runs on a combined gateway.
-func (c ControllerTypeModel) CombinedGateway() bool { return mapBool(c.raw, "combinedGateway") }
+func (c ControllerTypeModel) CombinedGateway() bool { return MapBool(c.raw, "combinedGateway") }
 
 // ControllerStatus wraps the maintenance/controllerStatus response.
 type ControllerStatus struct {
@@ -80,7 +80,7 @@ func (c ControllerStatus) Raw() map[string]any { return c.raw }
 
 // Name is the controller display name, stripped; nil when absent.
 func (c ControllerStatus) Name() *string {
-	name := strings.TrimSpace(mapStr(c.raw, "name"))
+	name := strings.TrimSpace(MapStr(c.raw, "name"))
 	if name == "" {
 		return nil
 	}
@@ -88,19 +88,19 @@ func (c ControllerStatus) Name() *string {
 }
 
 // MAC is the controller MAC address.
-func (c ControllerStatus) MAC() string { return mapStr(c.raw, "macAddress") }
+func (c ControllerStatus) MAC() string { return MapStr(c.raw, "macAddress") }
 
 // Uptime is the controller uptime in seconds.
-func (c ControllerStatus) Uptime() int64 { return int64(mapInt(c.raw, "upTime")) }
+func (c ControllerStatus) Uptime() int64 { return int64(MapInt(c.raw, "upTime")) }
 
 // ControllerVersion is the version reported by the status endpoint.
 func (c ControllerStatus) ControllerVersion() string {
-	return mapStr(c.raw, "controllerVersion")
+	return MapStr(c.raw, "controllerVersion")
 }
 
 // Model is the hardware model, falling back to "Controller".
 func (c ControllerStatus) Model() string {
-	if model := strings.TrimSpace(mapStr(c.raw, "model")); model != "" {
+	if model := strings.TrimSpace(MapStr(c.raw, "model")); model != "" {
 		return model
 	}
 	return "Controller"
@@ -118,22 +118,22 @@ func NewHardwareUpgradeStatus(m map[string]any) HardwareUpgradeStatus {
 func (c HardwareUpgradeStatus) Raw() map[string]any { return c.raw }
 
 // UpgradeStatus is the current status of the firmware upgrade process.
-func (c HardwareUpgradeStatus) UpgradeStatus() int { return mapInt(c.raw, "upgradeStatus") }
+func (c HardwareUpgradeStatus) UpgradeStatus() int { return MapInt(c.raw, "upgradeStatus") }
 
 // UpgradeMsg is the message associated with the current status.
 func (c HardwareUpgradeStatus) UpgradeMsg() string {
-	return mapStr(c.raw, "upgradeMsg")
+	return MapStr(c.raw, "upgradeMsg")
 }
 
 // UpgradeTime is the suggested refresh interval for watching progress.
-func (c HardwareUpgradeStatus) UpgradeTime() int { return mapInt(c.raw, "upgradeTime") }
+func (c HardwareUpgradeStatus) UpgradeTime() int { return MapInt(c.raw, "upgradeTime") }
 
 // DownloadProgress is the firmware download progress percentage.
-func (c HardwareUpgradeStatus) DownloadProgress() int { return mapInt(c.raw, "downloadProgress") }
+func (c HardwareUpgradeStatus) DownloadProgress() int { return MapInt(c.raw, "downloadProgress") }
 
 // RebootTime is the expected seconds before the controller is back online.
 func (c HardwareUpgradeStatus) RebootTime() int {
-	if v := mapInt(c.raw, "rebootTime"); v != 0 {
+	if v := MapInt(c.raw, "rebootTime"); v != 0 {
 		return v
 	}
 	return 300
@@ -149,11 +149,11 @@ type updateInfoSection struct {
 func (u updateInfoSection) Raw() map[string]any { return u.raw }
 
 // Upgrade reports whether an update is available.
-func (u updateInfoSection) Upgrade() bool { return mapBool(u.raw, "upgrade") }
+func (u updateInfoSection) Upgrade() bool { return MapBool(u.raw, "upgrade") }
 
 // CurrentVersion is the currently installed version, when reported.
 func (u updateInfoSection) CurrentVersion() *string {
-	v := mapStr(u.raw, "currentVersion")
+	v := MapStr(u.raw, "currentVersion")
 	if v == "" {
 		return nil
 	}
@@ -162,9 +162,9 @@ func (u updateInfoSection) CurrentVersion() *string {
 
 // LatestVersion is the latest available version, falling back to the current one.
 func (u updateInfoSection) LatestVersion() *string {
-	v := mapStr(u.raw, "latestVersion")
+	v := MapStr(u.raw, "latestVersion")
 	if v == "" {
-		v = mapStr(u.raw, "currentVersion")
+		v = MapStr(u.raw, "currentVersion")
 	}
 	if v == "" {
 		return nil
@@ -175,7 +175,7 @@ func (u updateInfoSection) LatestVersion() *string {
 // ReleaseNotes is the release notes, checking both known keys.
 func (u updateInfoSection) ReleaseNotes() *string {
 	for _, key := range []string{u.notesFirstKey, u.notesSecondKey} {
-		if v := mapStr(u.raw, key); v != "" {
+		if v := MapStr(u.raw, key); v != "" {
 			return &v
 		}
 	}
@@ -184,12 +184,12 @@ func (u updateInfoSection) ReleaseNotes() *string {
 
 // DownloadLink is the update download link, stripped; nil when absent.
 func (u updateInfoSection) DownloadLink() *string {
-	return strippedPtr(mapStr(u.raw, "downloadLink"))
+	return strippedPtr(MapStr(u.raw, "downloadLink"))
 }
 
 // ReleaseURL is the release information URL, stripped; nil when absent.
 func (u updateInfoSection) ReleaseURL() *string {
-	return strippedPtr(mapStr(u.raw, "releaseUrl"))
+	return strippedPtr(MapStr(u.raw, "releaseUrl"))
 }
 
 type HardwareUpdateInfo struct{ updateInfoSection }
@@ -218,7 +218,7 @@ func (c ControllerUpdateInfo) Raw() map[string]any { return c.raw }
 
 // Hardware is the hardware (firmware) update section, when present.
 func (c ControllerUpdateInfo) Hardware() *HardwareUpdateInfo {
-	m, ok := mapMap(c.raw, "hardware")
+	m, ok := MapMap(c.raw, "hardware")
 	if !ok || m == nil {
 		return nil
 	}
@@ -228,7 +228,7 @@ func (c ControllerUpdateInfo) Hardware() *HardwareUpdateInfo {
 
 // Software is the software update section, when present.
 func (c ControllerUpdateInfo) Software() *SoftwareUpdateInfo {
-	m, ok := mapMap(c.raw, "software")
+	m, ok := MapMap(c.raw, "software")
 	if !ok || m == nil {
 		return nil
 	}
@@ -297,7 +297,7 @@ func NewInterfaceDetails(m map[string]any) InterfaceDetails {
 func (c InterfaceDetails) Raw() map[string]any { return c.raw }
 
 // ControllerName is the display name of the controller.
-func (c InterfaceDetails) ControllerName() string { return mapStr(c.raw, "controllerName") }
+func (c InterfaceDetails) ControllerName() string { return MapStr(c.raw, "controllerName") }
 
 // FirmwareUpdate wraps a device firmware update entry.
 type FirmwareUpdate struct {
@@ -311,18 +311,18 @@ func NewFirmwareUpdate(m map[string]any) FirmwareUpdate {
 func (c FirmwareUpdate) Raw() map[string]any { return c.raw }
 
 // CurrentVersion is the device's current firmware version.
-func (c FirmwareUpdate) CurrentVersion() string { return mapStr(c.raw, "curFwVer") }
+func (c FirmwareUpdate) CurrentVersion() string { return MapStr(c.raw, "curFwVer") }
 
 // LatestVersion is the latest available firmware version.
 func (c FirmwareUpdate) LatestVersion() string {
-	if v := mapStr(c.raw, "lastFwVer"); v != "" {
+	if v := MapStr(c.raw, "lastFwVer"); v != "" {
 		return v
 	}
 	return c.CurrentVersion()
 }
 
 // ReleaseNotes are the release notes for the new firmware.
-func (c FirmwareUpdate) ReleaseNotes() string { return mapStr(c.raw, "fwReleaseLog") }
+func (c FirmwareUpdate) ReleaseNotes() string { return MapStr(c.raw, "fwReleaseLog") }
 
 func strippedPtr(s string) *string {
 	s = strings.TrimSpace(s)

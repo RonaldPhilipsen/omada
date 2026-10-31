@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -167,8 +168,8 @@ func TestLoginRejectsOldVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.login(context.Background()); !errors.Is(err, ErrUnsupportedControllerVersion) {
-		t.Errorf("got %v, want ErrUnsupportedControllerVersion", err)
+	if _, err := c.login(context.Background()); !errors.Is(err, models.ErrUnsupportedControllerVersion) {
+		t.Errorf("got %v, want models.ErrUnsupportedControllerVersion", err)
 	}
 }
 
@@ -227,9 +228,9 @@ func TestNonJSON200IsSessionClosed(t *testing.T) {
 
 	// First request fails with session closed; re-login happens; the retry
 	// hits the same handler, which keeps returning HTML, so the second
-	// attempt must surface ErrLoginSessionClosed.
-	if _, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil); !errors.Is(err, ErrLoginSessionClosed) {
-		t.Errorf("got %v, want ErrLoginSessionClosed", err)
+	// attempt must surface models.ErrLoginSessionClosed.
+	if _, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil); !errors.Is(err, models.ErrLoginSessionClosed) {
+		t.Errorf("got %v, want models.ErrLoginSessionClosed", err)
 	}
 }
 
@@ -241,9 +242,9 @@ func TestApplicationErrorCodeNoRelogin(t *testing.T) {
 	c := newTestConn(t, ts, 0)
 
 	_, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
-	var re *RequestError
+	var re *models.RequestError
 	if !errors.As(err, &re) || re.Code != 8101 {
-		t.Fatalf("got %v, want RequestError 8101", err)
+		t.Fatalf("got %v, want models.RequestError 8101", err)
 	}
 	if got := ts.countSpec("POST /abc/api/v2/login"); got != 1 {
 		t.Errorf("login count = %d, application errors must not re-login", got)
@@ -260,9 +261,9 @@ func TestCheckLoginTransientErrorPropagates(t *testing.T) {
 	c.lastLogon = c.now().Add(-2 * time.Hour)
 
 	_, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
-	var re *RequestError
+	var re *models.RequestError
 	if !errors.As(err, &re) || re.Code != 500 {
-		t.Fatalf("got %v, want RequestError 500", err)
+		t.Fatalf("got %v, want models.RequestError 500", err)
 	}
 	// No re-login attempt after a transient checkLogin failure.
 	if got := ts.countSpec("POST /abc/api/v2/login"); got != 1 {
@@ -320,7 +321,7 @@ func TestControllerInfoUnauthenticated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	min := ParseVersionMust("5.1.0")
+	min := models.ParseVersionMust("5.1.0")
 	if v.Compare(min) < 0 {
 		t.Errorf("version %v below minimum", v)
 	}

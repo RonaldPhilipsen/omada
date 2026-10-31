@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
@@ -20,7 +21,7 @@ func TestSiteVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SiteVersion() error = %v", err)
 	}
-	if version.Compare(ParseVersionMust("6.2.0.0")) != 0 {
+	if version.Compare(models.ParseVersionMust("6.2.0.0")) != 0 {
 		t.Errorf("SiteVersion() = %v, want 6.2.0.0", version)
 	}
 }
@@ -64,16 +65,16 @@ func TestClientByMAC(t *testing.T) {
 	sc := &SiteClient{c: cl.c, site: "site-1"}
 	client, err := sc.Client(context.Background(), "AA:BB:CC:DD:EE:01")
 	if err != nil {
-		t.Fatalf("Client() error = %v", err)
+		t.Fatalf("models.Client() error = %v", err)
 	}
 	if client.MAC() != "AA:BB:CC:DD:EE:01" {
-		t.Errorf("Client().MAC() = %q, want %q", client.MAC(), "AA:BB:CC:DD:EE:01")
+		t.Errorf("models.Client().MAC() = %q, want %q", client.MAC(), "AA:BB:CC:DD:EE:01")
 	}
 	if _, err := sc.Client(context.Background(), "unknown"); err == nil {
-		t.Fatal("Client() expected error for unknown client")
+		t.Fatal("models.Client() expected error for unknown client")
 	}
 	if _, err := sc.Client(context.Background(), ""); err == nil {
-		t.Fatal("Client() expected error for empty MAC")
+		t.Fatal("models.Client() expected error for empty MAC")
 	}
 }
 
@@ -144,7 +145,8 @@ func TestUpdateClientSettings(t *testing.T) {
 		t.Errorf("patch body clientName = %v, want New Name", patchBodies[0]["clientName"])
 	}
 
-	ipSetting := &IpSetting{data: map[string]any{"useFixedAddr": true, "netId": "net-1", "ip": "192.168.10.50"}}
+	ipSettingValue := models.NewIpSetting(map[string]any{"useFixedAddr": true, "netId": "net-1", "ip": "192.168.10.50"})
+	ipSetting := &ipSettingValue
 	if err := sc.UpdateClientSettings(context.Background(), "AA:BB:CC:DD:EE:01", "", ipSetting, nil); err != nil {
 		t.Fatalf("UpdateClientSettings() error = %v", err)
 	}
@@ -416,18 +418,18 @@ func TestUpdateVLAN(t *testing.T) {
 
 	name := "Renamed"
 	vlanID := 20
-	update, err := NewVlanUpdate(&name, &vlanID)
+	update, err := models.NewVlanUpdate(&name, &vlanID)
 	if err != nil {
-		t.Fatalf("NewVlanUpdate() error = %v", err)
+		t.Fatalf("models.NewVlanUpdate() error = %v", err)
 	}
-	network := LanNetwork{data: map[string]any{
+	network := models.NewLanNetwork(map[string]any{
 		"id": "net-1", "name": "Guest", "purpose": "vlan", "vlan": 10,
 		"primary":           false,
 		"application":       0,
 		"dhcpL2RelayEnable": false,
 		"dhcpGuard":         map[string]any{"enable": false, "dhcpSvr1": nil, "dhcpSvr2": nil},
 		"dhcpv6Guard":       map[string]any{"enable": false, "dhcpv6Svr1": nil, "dhcpv6Svr2": nil},
-	}}
+	})
 	n, err := sc.UpdateVLAN(context.Background(), network, update)
 	if err != nil {
 		t.Fatalf("UpdateVLAN() error = %v", err)
@@ -445,15 +447,15 @@ func TestUpdateVLAN(t *testing.T) {
 		t.Errorf("patch payload = %v, want name Renamed and vlan 20", patched)
 	}
 
-	if _, err := sc.UpdateVLAN(context.Background(), LanNetwork{}, update); err == nil {
+	if _, err := sc.UpdateVLAN(context.Background(), models.LanNetwork{}, update); err == nil {
 		t.Fatal("UpdateVLAN() expected error for empty network ID")
 	}
 	name2 := "X"
-	upd, err := NewVlanUpdate(&name2, nil)
+	upd, err := models.NewVlanUpdate(&name2, nil)
 	if err != nil {
-		t.Fatalf("NewVlanUpdate() error = %v", err)
+		t.Fatalf("models.NewVlanUpdate() error = %v", err)
 	}
-	lan := LanNetwork{data: map[string]any{"id": "net-2", "name": "LAN", "purpose": "lan", "vlan": 1}}
+	lan := models.NewLanNetwork(map[string]any{"id": "net-2", "name": "LAN", "purpose": "lan", "vlan": 1})
 	if _, err := sc.UpdateVLAN(context.Background(), lan, upd); err == nil {
 		t.Fatal("UpdateVLAN() expected error for non-VLAN network")
 	}

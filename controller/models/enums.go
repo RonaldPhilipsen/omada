@@ -1,4 +1,4 @@
-package controller
+package models
 
 // This file ports the IntEnum tables from upstream tplink_omada_client
 // definitions.py verbatim. Unknown input maps to the enum's Unknown (or

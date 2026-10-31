@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestGateways(t *testing.T) {
 			}
 			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
-					{"mac": "AA:BB:CC:DD:EE:01", "name": "Main Gateway", "type": "gateway", "status": 14, "statusCategory": 1, "ip": "192.168.1.1"},
+					{"mac": "AA:BB:CC:DD:EE:01", "name": "Main models.Gateway", "type": "gateway", "status": 14, "statusCategory": 1, "ip": "192.168.1.1"},
 				},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -33,8 +34,8 @@ func TestGateways(t *testing.T) {
 	if len(gateways) != 1 {
 		t.Fatalf("Gateways() returned %d gateways, want 1", len(gateways))
 	}
-	if gateways[0].MAC() != "AA:BB:CC:DD:EE:01" || gateways[0].Name() != "Main Gateway" {
-		t.Errorf("Gateways()[0] = %+v, want Main Gateway", gateways[0])
+	if gateways[0].MAC() != "AA:BB:CC:DD:EE:01" || gateways[0].Name() != "Main models.Gateway" {
+		t.Errorf("Gateways()[0] = %+v, want Main models.Gateway", gateways[0])
 	}
 }
 
@@ -44,11 +45,11 @@ func TestGatewayEmptyID(t *testing.T) {
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
 	if _, err := sc.Gateway(context.Background(), ""); err == nil {
-		t.Fatal("Gateway() expected error for empty device ID")
+		t.Fatal("models.Gateway() expected error for empty device ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("Gateway() error = %v, want *ValidationError", err)
+			t.Fatalf("models.Gateway() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -78,11 +79,11 @@ func TestGatewayPorts(t *testing.T) {
 	if ports[0].Index() != 1 {
 		t.Errorf("GatewayPorts()[0].Index() = %d, want 1", ports[0].Index())
 	}
-	if ports[0].Type() != GatewayPortTypeWAN {
-		t.Errorf("GatewayPorts()[0].Type() = %v, want %v", ports[0].Type(), GatewayPortTypeWAN)
+	if ports[0].Type() != models.GatewayPortTypeWAN {
+		t.Errorf("GatewayPorts()[0].Type() = %v, want %v", ports[0].Type(), models.GatewayPortTypeWAN)
 	}
-	if ports[0].PoE() != PoEModeEnabled {
-		t.Errorf("GatewayPorts()[0].PoE() = %v, want %v", ports[0].PoE(), PoEModeEnabled)
+	if ports[0].PoE() != models.PoEModeEnabled {
+		t.Errorf("GatewayPorts()[0].PoE() = %v, want %v", ports[0].PoE(), models.PoEModeEnabled)
 	}
 	if ports[0].Speed() != "1G" {
 		t.Errorf("GatewayPorts()[0].Speed() = %q, want 1G", ports[0].Speed())
@@ -114,13 +115,13 @@ func TestSetGatewayPortSettingsMerge(t *testing.T) {
 		}
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
-	if err := sc.SetGatewayPortSettings(context.Background(), "AA:BB:CC:DD:EE:01", 1, PoEModeEnabled, "2G", nil); err != nil {
+	if err := sc.SetGatewayPortSettings(context.Background(), "AA:BB:CC:DD:EE:01", 1, models.PoEModeEnabled, "2G", nil); err != nil {
 		t.Fatalf("SetGatewayPortSettings() error = %v", err)
 	}
 	if patched == nil {
 		t.Fatal("SetGatewayPortSettings() did not call the gateway port endpoint")
 	}
-	if patched["port"] != float64(1) || patched["poe"] != float64(int(PoEModeEnabled)) {
+	if patched["port"] != float64(1) || patched["poe"] != float64(int(models.PoEModeEnabled)) {
 		t.Errorf("SetGatewayPortSettings body = %v, want merged gateway port config", patched)
 	}
 }
@@ -139,10 +140,10 @@ func TestSetGatewayPoE(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
-	if err := sc.SetGatewayPoE(context.Background(), "AA:BB:CC:DD:EE:01", 1, PoEModeEnabled); err != nil {
+	if err := sc.SetGatewayPoE(context.Background(), "AA:BB:CC:DD:EE:01", 1, models.PoEModeEnabled); err != nil {
 		t.Fatalf("SetGatewayPoE() error = %v", err)
 	}
-	if body["port"] != float64(1) || body["poe"] != float64(int(PoEModeEnabled)) {
+	if body["port"] != float64(1) || body["poe"] != float64(int(models.PoEModeEnabled)) {
 		t.Errorf("SetGatewayPoE body = %v, want port 1 poe enabled", body)
 	}
 }
@@ -179,9 +180,9 @@ func TestGetGatewayPortEmptyID(t *testing.T) {
 	if _, err := sc.GetGatewayPort(context.Background(), "", 1); err == nil {
 		t.Fatal("GetGatewayPort() expected error for empty device ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("GetGatewayPort() error = %v, want *ValidationError", err)
+			t.Fatalf("GetGatewayPort() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -203,9 +204,9 @@ func TestGetGatewayPortMiss(t *testing.T) {
 	if _, err := sc.GetGatewayPort(context.Background(), "AA:BB:CC:DD:EE:01", 9); err == nil {
 		t.Fatal("GetGatewayPort() expected error for missing port")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("GetGatewayPort() error = %v, want *ValidationError", err)
+			t.Fatalf("GetGatewayPort() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -273,9 +274,9 @@ func TestSetGatewayWanPortConnectStateEmptyID(t *testing.T) {
 	if _, err := sc.SetGatewayWanPortConnectState(context.Background(), "", 1, true); err == nil {
 		t.Fatal("SetGatewayWanPortConnectState() expected error for empty device ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("SetGatewayWanPortConnectState() error = %v, want *ValidationError", err)
+			t.Fatalf("SetGatewayWanPortConnectState() error = %v, want *models.ValidationError", err)
 		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -68,13 +69,13 @@ func TestClientControllerInfo(t *testing.T) {
 	})
 	info, err := cl.ControllerInfo(context.Background())
 	if err != nil {
-		t.Fatalf("ControllerInfo() error = %v", err)
+		t.Fatalf("models.ControllerInfo() error = %v", err)
 	}
 	if info.ID() != testControllerID {
-		t.Errorf("ControllerInfo().ID() = %q, want %q", info.ID(), testControllerID)
+		t.Errorf("models.ControllerInfo().ID() = %q, want %q", info.ID(), testControllerID)
 	}
 	if info.ControllerVersion() != testControllerVer {
-		t.Errorf("ControllerInfo().ControllerVersion() = %q, want %q", info.ControllerVersion(), testControllerVer)
+		t.Errorf("models.ControllerInfo().ControllerVersion() = %q, want %q", info.ControllerVersion(), testControllerVer)
 	}
 }
 
@@ -126,8 +127,8 @@ func TestSiteByNameMiss(t *testing.T) {
 	if err == nil {
 		t.Fatalf("SiteByName() expected error, got site %+v", site)
 	}
-	if !errors.Is(err, ErrSiteNotFound) {
-		t.Errorf("SiteByName() error = %v, want ErrSiteNotFound", err)
+	if !errors.Is(err, models.ErrSiteNotFound) {
+		t.Errorf("SiteByName() error = %v, want models.ErrSiteNotFound", err)
 	}
 }
 
@@ -137,11 +138,11 @@ func TestSiteEmptyID(t *testing.T) {
 	})
 	_, err := cl.Site(context.Background(), "")
 	if err == nil {
-		t.Fatal("Site() expected error for empty site ID")
+		t.Fatal("models.Site() expected error for empty site ID")
 	}
-	var verr *ValidationError
+	var verr *models.ValidationError
 	if !errors.As(err, &verr) {
-		t.Errorf("Site() error = %v, want *ValidationError", err)
+		t.Errorf("models.Site() error = %v, want *models.ValidationError", err)
 	}
 }
 
@@ -272,9 +273,9 @@ func TestInstallControllerFirmwareEmptyVersion(t *testing.T) {
 	if err := cl.InstallControllerFirmware(context.Background(), ""); err == nil {
 		t.Fatal("InstallControllerFirmware() expected error for empty target version")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("InstallControllerFirmware() error = %v, want *ValidationError", err)
+			t.Fatalf("InstallControllerFirmware() error = %v, want *models.ValidationError", err)
 		}
 	}
 }

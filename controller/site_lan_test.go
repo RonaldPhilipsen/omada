@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"strings"
 	"testing"
@@ -45,11 +46,11 @@ func TestLanNetworkEmptyID(t *testing.T) {
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
 	if _, err := sc.LanNetwork(context.Background(), ""); err == nil {
-		t.Fatal("LanNetwork() expected error for empty network ID")
+		t.Fatal("models.LanNetwork() expected error for empty network ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("LanNetwork() error = %v, want *ValidationError", err)
+			t.Fatalf("models.LanNetwork() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -162,9 +163,9 @@ func TestVlanCreatePreviewAndWrite(t *testing.T) {
 		}
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
-	create, err := NewVlanCreate("Guest", 10)
+	create, err := models.NewVlanCreate("Guest", 10)
 	if err != nil {
-		t.Fatalf("NewVlanCreate() error = %v", err)
+		t.Fatalf("models.NewVlanCreate() error = %v", err)
 	}
 	if _, err := sc.PreviewVlanCreate(context.Background(), create); err != nil {
 		t.Fatalf("PreviewVlanCreate() error = %v", err)
@@ -173,7 +174,7 @@ func TestVlanCreatePreviewAndWrite(t *testing.T) {
 		t.Errorf("preview bodies = %v, want vlans=10", previewBodies)
 	}
 	if _, err := sc.VlanCreate(context.Background(), create); err != nil {
-		t.Fatalf("VlanCreate() error = %v", err)
+		t.Fatalf("models.VlanCreate() error = %v", err)
 	}
 	if len(createBodies) != 1 {
 		t.Fatalf("create calls = %d, want 1", len(createBodies))
@@ -196,15 +197,15 @@ func TestVlanWriteSuccessReadback(t *testing.T) {
 		}
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
-	create, err := NewVlanCreate("Guest", 10)
+	create, err := models.NewVlanCreate("Guest", 10)
 	if err != nil {
-		t.Fatalf("NewVlanCreate() error = %v", err)
+		t.Fatalf("models.NewVlanCreate() error = %v", err)
 	}
 	if _, err := sc.VlanCreate(context.Background(), create); err != nil {
-		t.Fatalf("VlanCreate() error = %v", err)
+		t.Fatalf("models.VlanCreate() error = %v", err)
 	}
 	if writes != 1 {
-		t.Errorf("VlanCreate writes = %d, want 1", writes)
+		t.Errorf("models.VlanCreate writes = %d, want 1", writes)
 	}
 }
 
@@ -222,19 +223,19 @@ func TestVlanWriteReadbackFailure(t *testing.T) {
 		}
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
-	create, err := NewVlanCreate("Guest", 10)
+	create, err := models.NewVlanCreate("Guest", 10)
 	if err != nil {
-		t.Fatalf("NewVlanCreate() error = %v", err)
+		t.Fatalf("models.NewVlanCreate() error = %v", err)
 	}
 	_, err = sc.VlanCreate(context.Background(), create)
 	if err == nil {
-		t.Fatal("VlanCreate() expected read-back failure error")
+		t.Fatal("models.VlanCreate() expected read-back failure error")
 	}
 	if !strings.Contains(err.Error(), "write may have succeeded; inspect controller state before retrying") {
-		t.Errorf("VlanCreate() error = %v, want read-back guidance", err)
+		t.Errorf("models.VlanCreate() error = %v, want read-back guidance", err)
 	}
 	if writes != 1 {
-		t.Errorf("VlanCreate writes = %d, want 1 (no auto-retry)", writes)
+		t.Errorf("models.VlanCreate writes = %d, want 1 (no auto-retry)", writes)
 	}
 }
 

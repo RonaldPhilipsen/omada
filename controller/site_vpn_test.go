@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
@@ -91,11 +92,11 @@ func TestVpnPolicyMiss(t *testing.T) {
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
 	if _, err := sc.VpnPolicy(context.Background(), "vpn-server-missing"); err == nil {
-		t.Fatal("VpnPolicy() expected error for unknown policy ID")
+		t.Fatal("models.VpnPolicy() expected error for unknown policy ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("VpnPolicy() error = %v, want *ValidationError", err)
+			t.Fatalf("models.VpnPolicy() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -141,9 +142,9 @@ func TestSetVpnPolicyEnabled(t *testing.T) {
 	if _, err := sc.SetVpnPolicyEnabled(context.Background(), "", true); err == nil {
 		t.Fatal("SetVpnPolicyEnabled() expected error for empty policy ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("SetVpnPolicyEnabled() error = %v, want *ValidationError", err)
+			t.Fatalf("SetVpnPolicyEnabled() error = %v, want *models.ValidationError", err)
 		}
 	}
 }

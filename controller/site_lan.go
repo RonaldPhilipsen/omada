@@ -3,36 +3,37 @@ package controller
 import (
 	"context"
 	"fmt"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/url"
 	"strconv"
 )
 
 // LanNetworks lists the LAN networks of the site.
-func (s *SiteClient) LanNetworks(ctx context.Context) ([]LanNetwork, error) {
+func (s *SiteClient) LanNetworks(ctx context.Context) ([]models.LanNetwork, error) {
 	entries, err := s.c.pagesV2(ctx, "lanNetworks", s.site, url.Values{"type": {"lan"}})
 	if err != nil {
 		return nil, err
 	}
-	networks := make([]LanNetwork, 0, len(entries))
+	networks := make([]models.LanNetwork, 0, len(entries))
 	for _, entry := range entries {
-		networks = append(networks, NewLanNetwork(entry))
+		networks = append(networks, models.NewLanNetwork(entry))
 	}
 	return networks, nil
 }
 
 // LanNetwork returns the LAN network with the given ID.
-func (s *SiteClient) LanNetwork(ctx context.Context, id string) (LanNetwork, error) {
+func (s *SiteClient) LanNetwork(ctx context.Context, id string) (models.LanNetwork, error) {
 	if id == "" {
-		return LanNetwork{}, &ValidationError{Msg: "network ID must not be empty"}
+		return models.LanNetwork{}, &models.ValidationError{Msg: "network ID must not be empty"}
 	}
 	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "lanNetworks/"+id, s.site, nil, nil)
 	if err != nil {
-		return LanNetwork{}, err
+		return models.LanNetwork{}, err
 	}
 	if len(m) == 0 {
-		return LanNetwork{}, &ValidationError{Msg: "network not found"}
+		return models.LanNetwork{}, &models.ValidationError{Msg: "network not found"}
 	}
-	return NewLanNetwork(m), nil
+	return models.NewLanNetwork(m), nil
 }
 
 // LanNetworkCreate is the create request for a LAN network.
@@ -51,21 +52,21 @@ type LanNetworkCreate struct {
 // NewLanNetworkCreate builds a validated LAN network create request.
 func NewLanNetworkCreate(name string, vlan int) (LanNetworkCreate, error) {
 	if name == "" {
-		return LanNetworkCreate{}, &ValidationError{Msg: "LAN network name must not be empty"}
+		return LanNetworkCreate{}, &models.ValidationError{Msg: "LAN network name must not be empty"}
 	}
 	if vlan < 1 || vlan > 4090 {
-		return LanNetworkCreate{}, &ValidationError{Msg: "VLAN ID must be an integer from 1 to 4090"}
+		return LanNetworkCreate{}, &models.ValidationError{Msg: "VLAN ID must be an integer from 1 to 4090"}
 	}
 	if vlan == 1 {
-		return LanNetworkCreate{}, &ValidationError{Msg: "VLAN 1 is protected"}
+		return LanNetworkCreate{}, &models.ValidationError{Msg: "VLAN 1 is protected"}
 	}
 	return LanNetworkCreate{Name: name, VLAN: vlan}, nil
 }
 
 // CreateLanNetwork creates a LAN network.
-func (s *SiteClient) CreateLanNetwork(ctx context.Context, create LanNetworkCreate) (LanNetwork, error) {
+func (s *SiteClient) CreateLanNetwork(ctx context.Context, create LanNetworkCreate) (models.LanNetwork, error) {
 	if _, err := NewLanNetworkCreate(create.Name, create.VLAN); err != nil {
-		return LanNetwork{}, err
+		return models.LanNetwork{}, err
 	}
 	body := map[string]any{
 		"name": create.Name,
@@ -73,12 +74,12 @@ func (s *SiteClient) CreateLanNetwork(ctx context.Context, create LanNetworkCrea
 	}
 	m, err := s.c.requestEndpoint(ctx, "POST", "v2", "lanNetworks", s.site, nil, body)
 	if err != nil {
-		return LanNetwork{}, err
+		return models.LanNetwork{}, err
 	}
 	if len(m) == 0 {
-		return LanNetwork{}, &ValidationError{Msg: "network not found"}
+		return models.LanNetwork{}, &models.ValidationError{Msg: "network not found"}
 	}
-	return NewLanNetwork(m), nil
+	return models.NewLanNetwork(m), nil
 }
 
 // LanNetworkUpdate changes a LAN network partially; only the set fields apply.
@@ -99,14 +100,14 @@ type LanNetworkUpdate struct {
 func (u LanNetworkUpdate) ID() string { return u.NetworkID }
 
 // UpdateLanNetwork updates a LAN network partially.
-func (s *SiteClient) UpdateLanNetwork(ctx context.Context, update LanNetworkUpdate) (LanNetwork, error) {
+func (s *SiteClient) UpdateLanNetwork(ctx context.Context, update LanNetworkUpdate) (models.LanNetwork, error) {
 	if update.NetworkID == "" {
-		return LanNetwork{}, &ValidationError{Msg: "network ID must not be empty"}
+		return models.LanNetwork{}, &models.ValidationError{Msg: "network ID must not be empty"}
 	}
 	if update.Name == nil && update.VLAN == nil && update.Subnet == nil && update.Mask == nil &&
 		update.Gateway == nil && update.DHCPEnabled == nil && update.StartIP == nil && update.EndIP == nil &&
 		update.DNSServers == nil {
-		return LanNetwork{}, &ValidationError{Msg: "at least one LAN network change is required"}
+		return models.LanNetwork{}, &models.ValidationError{Msg: "at least one LAN network change is required"}
 	}
 	body := map[string]any{}
 	if update.Name != nil {
@@ -138,12 +139,12 @@ func (s *SiteClient) UpdateLanNetwork(ctx context.Context, update LanNetworkUpda
 	}
 	m, err := s.c.requestEndpoint(ctx, "PUT", "v2", "lanNetworks/"+update.NetworkID, s.site, nil, body)
 	if err != nil {
-		return LanNetwork{}, err
+		return models.LanNetwork{}, err
 	}
 	if len(m) == 0 {
-		return LanNetwork{}, &ValidationError{Msg: "network not found"}
+		return models.LanNetwork{}, &models.ValidationError{Msg: "network not found"}
 	}
-	return NewLanNetwork(m), nil
+	return models.NewLanNetwork(m), nil
 }
 
 // VlanDelete identifies a VLAN-only network to delete.
@@ -152,7 +153,7 @@ type VlanDelete struct {
 }
 
 // PreviewVlanCreate previews a VLAN-only network creation.
-func (s *SiteClient) PreviewVlanCreate(ctx context.Context, create VlanCreate) (map[string]any, error) {
+func (s *SiteClient) PreviewVlanCreate(ctx context.Context, create models.VlanCreate) (map[string]any, error) {
 	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, create.Payload())
 	if err != nil {
 		return nil, err
@@ -161,25 +162,25 @@ func (s *SiteClient) PreviewVlanCreate(ctx context.Context, create VlanCreate) (
 }
 
 // VlanCreate creates a VLAN-only network; it does not configure routing or DHCP.
-func (s *SiteClient) VlanCreate(ctx context.Context, create VlanCreate) (map[string]any, error) {
+func (s *SiteClient) VlanCreate(ctx context.Context, create models.VlanCreate) (map[string]any, error) {
 	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlans", s.site, nil, create.Payload())
 	if err != nil {
 		return nil, err
 	}
-	if err := s.verifyVlan(ctx, create.vlanID); err != nil {
+	if err := s.verifyVlan(ctx, create.VLANID()); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
 // PreviewVlanUpdate previews a VLAN-only network update.
-func (s *SiteClient) PreviewVlanUpdate(ctx context.Context, update VlanUpdate) (map[string]any, error) {
+func (s *SiteClient) PreviewVlanUpdate(ctx context.Context, update models.VlanUpdate) (map[string]any, error) {
 	body := map[string]any{}
-	if update.name != nil {
-		body["name"] = *update.name
+	if update.Name() != nil {
+		body["name"] = *update.Name()
 	}
-	if update.vlanID != nil {
-		body["vlan"] = *update.vlanID
+	if update.VLANID() != nil {
+		body["vlan"] = *update.VLANID()
 	}
 	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, body)
 	if err != nil {
@@ -189,21 +190,21 @@ func (s *SiteClient) PreviewVlanUpdate(ctx context.Context, update VlanUpdate) (
 }
 
 // VlanUpdate changes a VLAN-only network; it preserves writable settings.
-func (s *SiteClient) VlanUpdate(ctx context.Context, update VlanUpdate) (map[string]any, error) {
+func (s *SiteClient) VlanUpdate(ctx context.Context, update models.VlanUpdate) (map[string]any, error) {
 	body := map[string]any{}
-	if update.name != nil {
-		body["name"] = *update.name
+	if update.Name() != nil {
+		body["name"] = *update.Name()
 	}
-	if update.vlanID != nil {
-		body["vlan"] = *update.vlanID
+	if update.VLANID() != nil {
+		body["vlan"] = *update.VLANID()
 	}
 	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlans", s.site, nil, body)
 	if err != nil {
 		return nil, err
 	}
 	vlan := 0
-	if update.vlanID != nil {
-		vlan = *update.vlanID
+	if update.VLANID() != nil {
+		vlan = *update.VLANID()
 	}
 	if err := s.verifyVlan(ctx, vlan); err != nil {
 		return nil, err

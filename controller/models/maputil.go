@@ -1,7 +1,7 @@
-package controller
+package models
 
-// mapStr returns the string value at key, or "" when absent/not a string.
-func mapStr(m map[string]any, key string) string {
+// MapStr returns the string value at key, or "" when absent/not a string.
+func MapStr(m map[string]any, key string) string {
 	if m == nil {
 		return ""
 	}
@@ -11,9 +11,9 @@ func mapStr(m map[string]any, key string) string {
 	return ""
 }
 
-// mapInt returns the numeric value at key as int, or 0 when absent.
+// MapInt returns the numeric value at key as int, or 0 when absent.
 // JSON numbers decode as float64; whole floats are converted safely.
-func mapInt(m map[string]any, key string) int {
+func MapInt(m map[string]any, key string) int {
 	if m == nil {
 		return 0
 	}
@@ -28,8 +28,8 @@ func mapInt(m map[string]any, key string) int {
 	return 0
 }
 
-// mapBool returns the bool value at key, or false when absent.
-func mapBool(m map[string]any, key string) bool {
+// MapBool returns the bool value at key, or false when absent.
+func MapBool(m map[string]any, key string) bool {
 	if m == nil {
 		return false
 	}
@@ -39,8 +39,8 @@ func mapBool(m map[string]any, key string) bool {
 	return false
 }
 
-// mapMap returns the nested object at key, ok=false when absent.
-func mapMap(m map[string]any, key string) (map[string]any, bool) {
+// MapMap returns the nested object at key, ok=false when absent.
+func MapMap(m map[string]any, key string) (map[string]any, bool) {
 	if m == nil {
 		return nil, false
 	}
@@ -50,8 +50,8 @@ func mapMap(m map[string]any, key string) (map[string]any, bool) {
 	return nil, false
 }
 
-// mapPtrBool returns a pointer to the bool at key, or nil when absent.
-func mapPtrBool(m map[string]any, key string) *bool {
+// MapPtrBool returns a pointer to the bool at key, or nil when absent.
+func MapPtrBool(m map[string]any, key string) *bool {
 	if m == nil {
 		return nil
 	}
@@ -61,8 +61,8 @@ func mapPtrBool(m map[string]any, key string) *bool {
 	return nil
 }
 
-// mapPtrInt returns a pointer to the numeric value at key, or nil when absent.
-func mapPtrInt(m map[string]any, key string) *int {
+// MapPtrInt returns a pointer to the numeric value at key, or nil when absent.
+func MapPtrInt(m map[string]any, key string) *int {
 	if m == nil {
 		return nil
 	}
@@ -79,8 +79,8 @@ func mapPtrInt(m map[string]any, key string) *int {
 	return nil
 }
 
-// mapPtrStr returns a pointer to the string at key, or nil when absent.
-func mapPtrStr(m map[string]any, key string) *string {
+// MapPtrStr returns a pointer to the string at key, or nil when absent.
+func MapPtrStr(m map[string]any, key string) *string {
 	if m == nil {
 		return nil
 	}
@@ -90,8 +90,8 @@ func mapPtrStr(m map[string]any, key string) *string {
 	return nil
 }
 
-// mapPtrFloat returns a pointer to the numeric value at key, or nil when absent.
-func mapPtrFloat(m map[string]any, key string) *float64 {
+// MapPtrFloat returns a pointer to the numeric value at key, or nil when absent.
+func MapPtrFloat(m map[string]any, key string) *float64 {
 	if m == nil {
 		return nil
 	}
@@ -108,8 +108,8 @@ func mapPtrFloat(m map[string]any, key string) *float64 {
 	return nil
 }
 
-// mapStrList returns the list of strings at key, or nil when absent.
-func mapStrList(m map[string]any, key string) []string {
+// MapStrList returns the list of strings at key, or nil when absent.
+func MapStrList(m map[string]any, key string) []string {
 	if m == nil {
 		return nil
 	}
@@ -126,8 +126,8 @@ func mapStrList(m map[string]any, key string) []string {
 	return out
 }
 
-// mapList returns the list at key as []any, or nil when absent.
-func mapList(m map[string]any, key string) []any {
+// MapList returns the list at key as []any, or nil when absent.
+func MapList(m map[string]any, key string) []any {
 	if m == nil {
 		return nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestSwitches(t *testing.T) {
 			}
 			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
-					{"mac": "AA:BB:CC:DD:EE:03", "name": "Rack Switch", "type": "switch", "status": 14, "statusCategory": 1},
+					{"mac": "AA:BB:CC:DD:EE:03", "name": "Rack models.Switch", "type": "switch", "status": 14, "statusCategory": 1},
 				},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -33,8 +34,8 @@ func TestSwitches(t *testing.T) {
 	if len(switches) != 1 {
 		t.Fatalf("Switches() returned %d switches, want 1", len(switches))
 	}
-	if switches[0].MAC() != "AA:BB:CC:DD:EE:03" || switches[0].Name() != "Rack Switch" {
-		t.Errorf("Switches()[0] = %+v, want Rack Switch", switches[0])
+	if switches[0].MAC() != "AA:BB:CC:DD:EE:03" || switches[0].Name() != "Rack models.Switch" {
+		t.Errorf("Switches()[0] = %+v, want Rack models.Switch", switches[0])
 	}
 }
 
@@ -44,11 +45,11 @@ func TestSwitchEmptyID(t *testing.T) {
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
 	if _, err := sc.Switch(context.Background(), ""); err == nil {
-		t.Fatal("Switch() expected error for empty device ID")
+		t.Fatal("models.Switch() expected error for empty device ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("Switch() error = %v, want *ValidationError", err)
+			t.Fatalf("models.Switch() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -60,7 +61,7 @@ func TestSwitchesByMAC(t *testing.T) {
 			gotMac = r.URL.Query().Get("mac")
 			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
-					{"mac": "AA:BB:CC:DD:EE:03", "name": "Rack Switch", "type": "switch"},
+					{"mac": "AA:BB:CC:DD:EE:03", "name": "Rack models.Switch", "type": "switch"},
 				},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -141,7 +142,7 @@ func TestSetSwitchPortSettingsMerge(t *testing.T) {
 		}
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
-	if err := sc.SetSwitchPortSettings(context.Background(), "AA:BB:CC:DD:EE:03", 1, PortTypeCopper, 20, []int{10}, nil, nil); err != nil {
+	if err := sc.SetSwitchPortSettings(context.Background(), "AA:BB:CC:DD:EE:03", 1, models.PortTypeCopper, 20, []int{10}, nil, nil); err != nil {
 		t.Fatalf("SetSwitchPortSettings() error = %v", err)
 	}
 	if patched == nil {
@@ -201,7 +202,7 @@ func TestPortProfileCRUD(t *testing.T) {
 		t.Fatalf("CreatePortProfile() error = %v", err)
 	}
 	if _, err := sc.PortProfile(context.Background(), "profile-1"); err != nil {
-		t.Fatalf("PortProfile() error = %v", err)
+		t.Fatalf("models.PortProfile() error = %v", err)
 	}
 	if _, err := sc.UpdatePortProfile(context.Background(), "profile-1", PortProfileOverrides{Name: "Profile B"}); err != nil {
 		t.Fatalf("UpdatePortProfile() error = %v", err)
@@ -244,10 +245,10 @@ func TestPortConfigVersionGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SiteVersion() error = %v", err)
 	}
-	if version.Compare(ParseVersionMust("5.15")) <= 0 {
+	if version.Compare(models.ParseVersionMust("5.15")) <= 0 {
 		t.Fatalf("SiteVersion() = %v, want the 5.15 fixture version", version)
 	}
-	if err := sc.SetSwitchPortSettings(context.Background(), "AA:BB:CC:DD:EE:03", 1, PortTypeCopper, 20, []int{10}, nil, nil); err != nil {
+	if err := sc.SetSwitchPortSettings(context.Background(), "AA:BB:CC:DD:EE:03", 1, models.PortTypeCopper, 20, []int{10}, nil, nil); err != nil {
 		t.Fatalf("SetSwitchPortSettings() error = %v", err)
 	}
 }
@@ -281,8 +282,8 @@ func TestGetSwitchPort(t *testing.T) {
 	if port.PortID() != "3" {
 		t.Errorf("GetSwitchPort() PortID = %q, want 3", port.PortID())
 	}
-	if port.PoEMode() != PoEModeEnabled {
-		t.Errorf("GetSwitchPort() PoEMode = %v, want enabled", port.PoEMode())
+	if port.PoEMode() != models.PoEModeEnabled {
+		t.Errorf("GetSwitchPort() models.PoEMode = %v, want enabled", port.PoEMode())
 	}
 	if !port.HasProfileOverride() {
 		t.Errorf("GetSwitchPort() HasProfileOverride = false, want true")
@@ -297,9 +298,9 @@ func TestGetSwitchPortEmptyID(t *testing.T) {
 	if _, err := sc.GetSwitchPort(context.Background(), "", 3); err == nil {
 		t.Fatal("GetSwitchPort() expected error for empty device ID")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("GetSwitchPort() error = %v, want *ValidationError", err)
+			t.Fatalf("GetSwitchPort() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -316,8 +317,8 @@ func TestGetSwitchPortMiss(t *testing.T) {
 	if _, err := sc.GetSwitchPort(context.Background(), "AA:BB:CC:DD:EE:03", 3); err == nil {
 		t.Fatal("GetSwitchPort() expected error for missing port")
 	} else {
-		if !errors.Is(err, ErrInvalidDevice) {
-			t.Fatalf("GetSwitchPort() error = %v, want wrapped %v", err, ErrInvalidDevice)
+		if !errors.Is(err, models.ErrInvalidDevice) {
+			t.Fatalf("GetSwitchPort() error = %v, want wrapped %v", err, models.ErrInvalidDevice)
 		}
 	}
 }

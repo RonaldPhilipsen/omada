@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
@@ -117,11 +118,11 @@ func TestDhcpReservationMiss(t *testing.T) {
 	})
 	sc := &SiteClient{c: cl.c, site: "site-1"}
 	if _, err := sc.DhcpReservation(context.Background(), "192.168.10.99"); err == nil {
-		t.Fatal("DhcpReservation() expected error for unknown reservation IP")
+		t.Fatal("models.DhcpReservation() expected error for unknown reservation IP")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("DhcpReservation() error = %v, want *ValidationError", err)
+			t.Fatalf("models.DhcpReservation() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -132,25 +133,25 @@ func TestCreateDhcpReservationValidation(t *testing.T) {
 	if _, err := sc.CreateDhcpReservation(context.Background(), "", "192.168.10.5", "DE:AD:BE:EF:99:99"); err == nil {
 		t.Fatal("CreateDhcpReservation() expected error for empty host")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("CreateDhcpReservation() error = %v, want *ValidationError", err)
+			t.Fatalf("CreateDhcpReservation() error = %v, want *models.ValidationError", err)
 		}
 	}
 	if _, err := sc.CreateDhcpReservation(context.Background(), "Printer", "", "DE:AD:BE:EF:99:99"); err == nil {
 		t.Fatal("CreateDhcpReservation() expected error for empty IP")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("CreateDhcpReservation() error = %v, want *ValidationError", err)
+			t.Fatalf("CreateDhcpReservation() error = %v, want *models.ValidationError", err)
 		}
 	}
 	if _, err := sc.CreateDhcpReservation(context.Background(), "Printer", "192.168.10.5", ""); err == nil {
 		t.Fatal("CreateDhcpReservation() expected error for empty MAC")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("CreateDhcpReservation() error = %v, want *ValidationError", err)
+			t.Fatalf("CreateDhcpReservation() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -219,9 +220,9 @@ func TestUpdateDhcpReservation(t *testing.T) {
 	if _, err := sc.UpdateDhcpReservation(context.Background(), DhcpReservationUpdate{}); err == nil {
 		t.Fatal("UpdateDhcpReservation() expected error for empty update")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("UpdateDhcpReservation() error = %v, want *ValidationError", err)
+			t.Fatalf("UpdateDhcpReservation() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
@@ -256,9 +257,9 @@ func TestDeleteDhcpReservation(t *testing.T) {
 	if err := sc.DeleteDhcpReservation(context.Background(), ""); err == nil {
 		t.Fatal("DeleteDhcpReservation() expected error for empty IP")
 	} else {
-		var verr *ValidationError
+		var verr *models.ValidationError
 		if !errors.As(err, &verr) {
-			t.Fatalf("DeleteDhcpReservation() error = %v, want *ValidationError", err)
+			t.Fatalf("DeleteDhcpReservation() error = %v, want *models.ValidationError", err)
 		}
 	}
 }
