@@ -14,6 +14,7 @@
 
 - Module: `github.com/RonaldPhilipsen/omada` (repo root).
 - Runtime dependencies: Go stdlib + `github.com/oapi-codegen/runtime` v1.8.0 only. `controller/` stays stdlib-only and is never modified.
+- No duplication between `controller/` (local controller API) and `cloud/` (hosted northbound API): no imports in either direction, no shared or re-exported types, no copy-pasted code. Both trees cover the same domains (gateways, clients, ...) against two different services with different wire formats; similarly-named types in both are intentional and must never be merged, aliased, or converted between. Enforced by the Task 7 cross-import check.
 - Generator pinned: oapi-codegen v2.8.1 (`$(go env GOPATH)/bin/oapi-codegen`).
 - 19 domain packages, exactly the keys of `gen/tags.json`: `ap, client, device, gateway, insight, lan, log, msp, remote, security, sim, site, stack, switch, topology, user, voip, vpn, wireless`.
 - Every public operation (2,510 of them; `/internal` paths excluded) maps to exactly one package; `gen/verify_mapping.py` enforces this and fails the build otherwise.
@@ -371,6 +372,8 @@ func CollectAll[T any](ctx context.Context, fetch func(ctx context.Context, page
 
 `CollectAll` guards: `pageSize < 1` → error; `maxRows < 1` → error; stops on first error from `fetch`; a page with `len(Rows) < pageSize` ends collection even if `TotalRows` is unknown.
 
+`CollectAll` mirrors the bounded-collector discipline of `controller/conn/pagination.go` (`collectPages`: hard page cap, stop on short page or `totalRows`), but is **independent code by design** — the two APIs have different wire formats (typed generated structs vs `map[string]any`), so the logic is deliberately not shared or extracted into a common package (Global Constraints: no duplication between `controller/` and `cloud/`).
+
 - [ ] **Step 1: Write the failing tests**
 
 `cloud/errors_test.go`:
@@ -474,9 +477,11 @@ Document: what it is (generated northbound client, 2,510 operations, 19 domain p
 
 ```bash
 gofmt -l . && go vet ./... && go test ./... -race -count=1
+! grep -rn "omada/controller" cloud/
+! grep -rn "omada/cloud" controller/
 ```
 
-Expected: no unformatted files, vet clean, all tests PASS.
+Expected: no unformatted files, vet clean, all tests PASS, and neither grep matches — no imports (hence no duplication) between the `controller/` and `cloud/` trees.
 
 - [ ] **Step 3: Commit**
 

@@ -85,6 +85,10 @@ Fetched from `https://use1-omada-northbound.tplinkcloud.com/v3/api-docs`
 - No import cycles: `cloud` root → domain packages; domain packages are
   independent of each other (shared types are duplicated per package, which
   is expected and fine).
+- No duplication between `controller/` and `cloud/`: no cross-imports in
+  either direction, no shared types, no copy-pasted code. The two trees cover
+  the same domains against two different services with different wire
+  formats, so similarly-named types are intentional and never merged.
 - The spec patch script must be pure and deterministic (same input → same
   output), and must fail loudly if the upstream spec changes shape in a way
   the patch doesn't handle.
