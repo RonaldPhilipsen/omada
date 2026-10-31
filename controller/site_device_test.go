@@ -268,3 +268,64 @@ func TestUpdateFirmwareChannel(t *testing.T) {
 		t.Errorf("UpdateFirmwareChannel body channel = %v, want beta", body["channel"])
 	}
 }
+
+func TestGetFirmwareDetails(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:03/firmware" {
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+				"curFwVer":     "6.2.0.0",
+				"lastFwVer":    "6.2.1.0",
+				"fwReleaseLog": "Security fixes",
+			}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	update, err := sc.GetFirmwareDetails(context.Background(), "AA:BB:CC:DD:EE:03")
+	if err != nil {
+		t.Fatalf("GetFirmwareDetails() error = %v", err)
+	}
+	if update.CurrentVersion() != "6.2.0.0" {
+		t.Errorf("GetFirmwareDetails() CurrentVersion = %q, want 6.2.0.0", update.CurrentVersion())
+	}
+	if update.LatestVersion() != "6.2.1.0" {
+		t.Errorf("GetFirmwareDetails() LatestVersion = %q, want 6.2.1.0", update.LatestVersion())
+	}
+	if update.ReleaseNotes() != "Security fixes" {
+		t.Errorf("GetFirmwareDetails() ReleaseNotes = %q, want Security fixes", update.ReleaseNotes())
+	}
+}
+
+func TestGetFirmwareDetailsEmptyID(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	if _, err := sc.GetFirmwareDetails(context.Background(), ""); err == nil {
+		t.Fatal("GetFirmwareDetails() expected error for empty device ID")
+	} else {
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("GetFirmwareDetails() error = %v, want *ValidationError", err)
+		}
+	}
+}
+
+func TestGetFirmwareDetailsMiss(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:03/firmware" {
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	if _, err := sc.GetFirmwareDetails(context.Background(), "AA:BB:CC:DD:EE:03"); err == nil {
+		t.Fatal("GetFirmwareDetails() expected error for missing device")
+	} else {
+		if !errors.Is(err, ErrInvalidDevice) {
+			t.Fatalf("GetFirmwareDetails() error = %v, want wrapped %v", err, ErrInvalidDevice)
+		}
+	}
+}

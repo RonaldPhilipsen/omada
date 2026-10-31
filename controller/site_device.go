@@ -124,6 +124,21 @@ func (s *SiteClient) GetFirmwareUpdates(ctx context.Context) ([]FirmwareUpdate, 
 	return updates, nil
 }
 
+// GetFirmwareDetails returns the firmware details of a single device.
+func (s *SiteClient) GetFirmwareDetails(ctx context.Context, deviceID string) (FirmwareUpdate, error) {
+	if deviceID == "" {
+		return FirmwareUpdate{}, &ValidationError{Msg: "device ID must not be empty"}
+	}
+	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "devices/"+deviceID+"/firmware", s.site, nil, nil)
+	if err != nil {
+		return FirmwareUpdate{}, err
+	}
+	if len(m) == 0 {
+		return FirmwareUpdate{}, fmt.Errorf("%w: device %q not found", ErrInvalidDevice, deviceID)
+	}
+	return NewFirmwareUpdate(m), nil
+}
+
 // UpdateFirmwareChannel selects the firmware release channel to check.
 func (s *SiteClient) UpdateFirmwareChannel(ctx context.Context, section UpdateSection, channel string) error {
 	body := map[string]any{
