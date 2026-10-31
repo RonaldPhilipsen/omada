@@ -10,7 +10,7 @@ import (
 
 // Devices lists the devices visible to the site.
 func (s *SiteClient) Devices(ctx context.Context) ([]models.Device, error) {
-	entries, err := s.c.pagesV2(ctx, "devices", s.site, url.Values{})
+	entries, err := s.c.PagesV2(ctx, "devices", s.site, url.Values{})
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (s *SiteClient) Device(ctx context.Context, deviceID string) (models.Device
 	if deviceID == "" {
 		return models.Device{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "devices/"+deviceID, s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "devices/"+deviceID, s.site, nil, nil)
 	if err != nil {
 		return models.Device{}, err
 	}
@@ -41,7 +41,7 @@ func (s *SiteClient) DeviceByMAC(ctx context.Context, mac string) (models.Device
 	if mac == "" {
 		return models.Device{}, &models.ValidationError{Msg: "device MAC must not be empty"}
 	}
-	m, err := s.c.openapiRequest(ctx, "GET", "v2", "devices", s.site, url.Values{"mac": {mac}}, nil)
+	m, err := s.c.OpenapiRequest(ctx, "GET", "v2", "devices", s.site, url.Values{"mac": {mac}}, nil)
 	if err != nil {
 		return models.Device{}, err
 	}
@@ -53,7 +53,7 @@ func (s *SiteClient) DeviceByMAC(ctx context.Context, mac string) (models.Device
 
 // models.Topology fetches the site's physical topology tree.
 func (s *SiteClient) Topology(ctx context.Context) (models.Topology, error) {
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "topology", s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "topology", s.site, nil, nil)
 	if err != nil {
 		return models.Topology{}, err
 	}
@@ -65,7 +65,7 @@ func (s *SiteClient) TopologyNode(ctx context.Context, networkID string) (models
 	if networkID == "" {
 		return models.TopologyNode{}, &models.ValidationError{Msg: "network ID must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "topology/"+networkID, s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "topology/"+networkID, s.site, nil, nil)
 	if err != nil {
 		return models.TopologyNode{}, err
 	}
@@ -84,7 +84,7 @@ func (s *SiteClient) SetDeviceLED(ctx context.Context, deviceID string, state mo
 		"state":    int(state),
 		"duration": int(duration / time.Second),
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/led", s.site, nil, body)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/led", s.site, nil, body)
 	return err
 }
 
@@ -93,7 +93,7 @@ func (s *SiteClient) RebootDevice(ctx context.Context, deviceID string) error {
 	if deviceID == "" {
 		return &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/cmd/reboot", s.site, nil, nil)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/cmd/reboot", s.site, nil, nil)
 	return err
 }
 
@@ -105,13 +105,13 @@ func (s *SiteClient) UpgradeDeviceFirmware(ctx context.Context, deviceIDs []stri
 	body := map[string]any{
 		"deviceIds": deviceIDs,
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "cmd/upgrade", s.site, nil, body)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "cmd/upgrade", s.site, nil, body)
 	return err
 }
 
 // GetFirmwareUpdates lists the firmware updates for the site's devices.
 func (s *SiteClient) GetFirmwareUpdates(ctx context.Context) ([]models.FirmwareUpdate, error) {
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "upgrade", s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "upgrade", s.site, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (s *SiteClient) GetFirmwareDetails(ctx context.Context, deviceID string) (m
 	if deviceID == "" {
 		return models.FirmwareUpdate{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "devices/"+deviceID+"/firmware", s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "devices/"+deviceID+"/firmware", s.site, nil, nil)
 	if err != nil {
 		return models.FirmwareUpdate{}, err
 	}
@@ -146,7 +146,7 @@ func (s *SiteClient) UpdateFirmwareChannel(ctx context.Context, section UpdateSe
 		"section": string(section),
 		"channel": channel,
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "upgrade", s.site, nil, body)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "upgrade", s.site, nil, body)
 	return err
 }
 
@@ -155,7 +155,7 @@ func (s *SiteClient) RestoreDevice(ctx context.Context, deviceID string) error {
 	if deviceID == "" {
 		return &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/cmd/restore", s.site, nil, nil)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/cmd/restore", s.site, nil, nil)
 	return err
 }
 
@@ -164,6 +164,6 @@ func (s *SiteClient) FactoryResetDevice(ctx context.Context, deviceID string) er
 	if deviceID == "" {
 		return &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/cmd/factoryReset", s.site, nil, nil)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "devices/"+deviceID+"/cmd/factoryReset", s.site, nil, nil)
 	return err
 }

@@ -1,4 +1,4 @@
-package controller
+package conn
 
 import (
 	"context"
@@ -86,7 +86,7 @@ func TestPagesV2CollectsAllPages(t *testing.T) {
 		empty,
 	})
 
-	got, err := c.pagesV2(context.Background(), "devices", "", nil)
+	got, err := c.PagesV2(context.Background(), "devices", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func (h *pagedHandler) pages0Data(n int) []map[string]any {
 func TestPagesV2StopsOnTotalRows(t *testing.T) {
 	_, c, h := setupPaged(t, "GET", "/abc/api/v2/devices", []map[string]any{page100(100)})
 
-	got, err := c.pagesV2(context.Background(), "devices", "", nil)
+	got, err := c.PagesV2(context.Background(), "devices", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestPagesV2BoundedOnEmptyPage(t *testing.T) {
 		{"errorCode": 0, "data": []any{}, "currentSize": 0, "totalRows": 5000},
 	})
 
-	got, err := c.pagesV2(context.Background(), "devices", "", nil)
+	got, err := c.PagesV2(context.Background(), "devices", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestPagesOpenAPIPostCollectsAllPages(t *testing.T) {
 		map[string]any{"errorCode": 0, "data": []any{}, "currentSize": 0, "totalRows": 140},
 	})
 
-	got, err := c.pagesOpenAPIPost(context.Background(), "v1", "lan-networks", "", map[string]any{"type": "lan"})
+	got, err := c.PagesOpenAPIPost(context.Background(), "v1", "lan-networks", "", map[string]any{"type": "lan"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestPagesOpenAPIPostCollectsAllPages(t *testing.T) {
 func TestPagesOpenAPIGetCollectsAllPages(t *testing.T) {
 	_, c, h := setupPaged(t, "GET", "/openapi/v1/abc/devices", []map[string]any{page100(100)})
 
-	got, err := c.pagesOpenAPIGet(context.Background(), "v1", "devices", "", nil)
+	got, err := c.PagesOpenAPIGet(context.Background(), "v1", "devices", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestPagesHardCap(t *testing.T) {
 	}
 	_, c, h := setupPaged(t, "GET", "/abc/api/v2/devices", pages)
 
-	got, err := c.pagesV2(context.Background(), "devices", "", nil)
+	got, err := c.PagesV2(context.Background(), "devices", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

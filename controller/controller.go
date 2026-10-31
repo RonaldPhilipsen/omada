@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/RonaldPhilipsen/omada/controller/conn"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 )
 
 // Controller is the controller-level API facade. Controller-scoped operations
 // that do not belong to a site are served through it.
 type Controller struct {
-	c *conn
+	c conn.Connection
 }
 
 // Option customizes a Controller.
@@ -55,34 +56,21 @@ func New(controllerURL, username, password string, opts ...Option) (*Controller,
 			hc.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 		}
 	}
-	c, err := newConn(controllerURL, username, password, hc)
+	c, err := conn.New(controllerURL, username, password, hc)
 	if err != nil {
 		return nil, err
 	}
 	cl := &Controller{c: c}
-	if err := cl.login(context.Background()); err != nil {
+	if _, err := cl.c.Login(context.Background()); err != nil {
 		hc.CloseIdleConnections()
 		return nil, err
 	}
 	return cl, nil
 }
 
-// login authenticates the client against the controller.
-func (cl *Controller) login(ctx context.Context) error {
-	cl.c.authMu.Lock()
-	defer cl.c.authMu.Unlock()
-	_, err := cl.c.login(ctx)
-	return err
-}
-
-// url builds the controller-scoped URL for an API endpoint. Callers must hold authMu.
-func (cl *Controller) url(api, endpoint, site string) string {
-	return cl.c.buildURL(api, endpoint, site)
-}
-
 // Sites lists the sites the current user can administer.
 func (cl *Controller) Sites(ctx context.Context) ([]models.Site, error) {
-	m, err := cl.c.requestEndpoint(ctx, "GET", "v2", "users/current", "", nil, nil)
+	m, err := cl.c.RequestEndpoint(ctx, "GET", "v2", "users/current", "", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +95,7 @@ func (cl *Controller) Site(ctx context.Context, siteID string) (models.Site, err
 	if siteID == "" {
 		return models.Site{}, &models.ValidationError{Msg: "site ID must not be empty"}
 	}
-	m, err := cl.c.siteInfo(ctx, siteID)
+	m, err := cl.c.SiteInfo(ctx, siteID)
 	if err != nil {
 		return models.Site{}, err
 	}
@@ -130,7 +118,7 @@ func (cl *Controller) SiteByName(ctx context.Context, name string) (models.Site,
 
 // models.ControllerInfo fetches unauthenticated controller diagnostic information.
 func (cl *Controller) ControllerInfo(ctx context.Context) (models.ControllerInfo, error) {
-	m, err := cl.c.controllerInfo(ctx)
+	m, err := cl.c.ControllerInfo(ctx)
 	if err != nil {
 		return models.ControllerInfo{}, err
 	}
@@ -139,18 +127,18 @@ func (cl *Controller) ControllerInfo(ctx context.Context) (models.ControllerInfo
 
 // ControllerVersion returns the controller software version.
 func (cl *Controller) ControllerVersion(ctx context.Context) (models.Version, error) {
-	return cl.c.controllerVersion(ctx)
+	return cl.c.ControllerVersion(ctx)
 }
 
 // Reboot reboots the controller.
 func (cl *Controller) Reboot(ctx context.Context) error {
-	_, err := cl.c.requestEndpoint(ctx, "POST", "v2", "cmd/reboot", "", nil, nil)
+	_, err := cl.c.RequestEndpoint(ctx, "POST", "v2", "cmd/reboot", "", nil, nil)
 	return err
 }
 
 // Shutdown shuts the controller down.
 func (cl *Controller) Shutdown(ctx context.Context) error {
-	_, err := cl.c.requestEndpoint(ctx, "POST", "v2", "cmd/shutdown", "", nil, nil)
+	_, err := cl.c.RequestEndpoint(ctx, "POST", "v2", "cmd/shutdown", "", nil, nil)
 	return err
 }
 
@@ -160,13 +148,13 @@ func (cl *Controller) InstallControllerFirmware(ctx context.Context, targetVersi
 		return &models.ValidationError{Msg: "target version must not be empty"}
 	}
 	body := map[string]any{"targetVersion": targetVersion}
-	_, err := cl.c.requestEndpoint(ctx, "POST", "v2", "cmd/upgradeFirmware", "", nil, body)
+	_, err := cl.c.RequestEndpoint(ctx, "POST", "v2", "cmd/upgradeFirmware", "", nil, body)
 	return err
 }
 
 // GetControllerUpgradeStatus returns the status of an ongoing hardware controller firmware upgrade.
 func (cl *Controller) GetControllerUpgradeStatus(ctx context.Context) (*models.HardwareUpgradeStatus, error) {
-	m, err := cl.c.requestEndpoint(ctx, "GET", "v2", "maintenance/hardware/upgradeStatus", "", nil, nil)
+	m, err := cl.c.RequestEndpoint(ctx, "GET", "v2", "maintenance/hardware/upgradeStatus", "", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +180,7 @@ func (cl *Controller) FirmwareUpdates(ctx context.Context) (models.ControllerUpd
 	if version.Compare(models.ParseVersionMust("6.3")) >= 0 {
 		endpoint = "maintenance/software/channelUpdate"
 	}
-	m, err := cl.c.requestEndpoint(ctx, "GET", "v2", endpoint, "", nil, nil)
+	m, err := cl.c.RequestEndpoint(ctx, "GET", "v2", endpoint, "", nil, nil)
 	if err != nil {
 		return models.ControllerUpdateInfo{}, err
 	}
@@ -205,16 +193,16 @@ func (cl *Controller) UpdateFirmwareChannel(ctx context.Context, section UpdateS
 		"section": string(section),
 		"channel": channel,
 	}
-	_, err := cl.c.requestEndpoint(ctx, "POST", "v2", "upgrade", "", nil, body)
+	_, err := cl.c.RequestEndpoint(ctx, "POST", "v2", "upgrade", "", nil, body)
 	return err
 }
 
 // SetCertificate uploads a new certificate and enables it.
 func (cl *Controller) SetCertificate(ctx context.Context, keyPEM, certPEM string) error {
-	m, err := cl.c.doMultipart(ctx, "POST", cl.url("v2", "cmd/uploadCert", ""), nil, map[string]string{
+	m, err := cl.c.DoMultipart(ctx, "POST", cl.c.BuildURL("v2", "cmd/uploadCert", ""), nil, map[string]string{
 		"key":  keyPEM,
 		"cert": certPEM,
-	}, cl.csrfToken())
+	}, cl.c.CSRFToken())
 	if err != nil {
 		return err
 	}
@@ -227,21 +215,14 @@ func (cl *Controller) SetCertificate(ctx context.Context, keyPEM, certPEM string
 			"keyPassword": "",
 		},
 	}
-	_, err = cl.c.requestEndpoint(ctx, "PATCH", "v2", "controller/setting", "", nil, payload)
+	_, err = cl.c.RequestEndpoint(ctx, "PATCH", "v2", "controller/setting", "", nil, payload)
 	return err
 }
 
 // Close releases pooled idle connections.
 func (cl *Controller) Close() error {
-	cl.c.client.CloseIdleConnections()
+	cl.c.CloseIdleConnections()
 	return nil
-}
-
-// csrfToken returns the current CSRF token snapshot.
-func (cl *Controller) csrfToken() string {
-	cl.c.authMu.Lock()
-	defer cl.c.authMu.Unlock()
-	return cl.c.csrf
 }
 
 // UpdateSection identifies the hardware or software half of a firmware update.

@@ -14,7 +14,7 @@ var vpnCategoryOrder = []models.VpnCategory{models.VpnServer, models.VpnClient, 
 func (s *SiteClient) VpnPolicies(ctx context.Context) ([]models.VpnPolicy, error) {
 	var policies []models.VpnPolicy
 	for _, category := range vpnCategoryOrder {
-		entries, err := s.c.pagesOpenAPIGet(ctx, "v2", "vpn/"+category.ListEndpoint(), s.site, url.Values{})
+		entries, err := s.c.PagesOpenAPIGet(ctx, "v2", "vpn/"+category.ListEndpoint(), s.site, url.Values{})
 		if err != nil {
 			continue
 		}
@@ -48,7 +48,7 @@ func (s *SiteClient) SetVpnPolicyEnabled(ctx context.Context, id string, enabled
 	if id == "" {
 		return models.VpnPolicy{}, &models.ValidationError{Msg: "VPN policy ID must not be empty"}
 	}
-	m, err := s.c.openapiRequest(ctx, "PATCH", "v1", "vpn/"+id+"/status", s.site, nil, map[string]any{"status": enabled})
+	m, err := s.c.OpenapiRequest(ctx, "PATCH", "v1", "vpn/"+id+"/status", s.site, nil, map[string]any{"status": enabled})
 	if err != nil {
 		return models.VpnPolicy{}, err
 	}

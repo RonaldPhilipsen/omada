@@ -1,4 +1,4 @@
-package controller
+package conn
 
 import (
 	"bytes"
@@ -17,9 +17,43 @@ import (
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 )
 
-// conn is the unexported HTTP + auth state shared by models.Client and SiteClient.
+// Connection is an authenticated connection to an Omada controller.
 // Data requests run concurrently; only login/re-login transitions are
-// serialized via authMu.
+// serialized internally.
+type Connection interface {
+	// Login authenticates against the controller and returns the controller ID.
+	Login(ctx context.Context) (string, error)
+	// RequestEndpoint performs an authenticated v2 API request.
+	RequestEndpoint(ctx context.Context, method, api, endpoint, site string, query url.Values, body any) (map[string]any, error)
+	// OpenapiRequest performs an authenticated OpenAPI-versioned request.
+	OpenapiRequest(ctx context.Context, method, version, endpoint, site string, query url.Values, body any) (map[string]any, error)
+	// SiteInfo fetches a site's detail object.
+	SiteInfo(ctx context.Context, site string) (map[string]any, error)
+	// SiteVersion returns the site's reported version.
+	SiteVersion(ctx context.Context, site string) (models.Version, error)
+	// DoMultipart performs a multipart form-data request against an explicit URL.
+	DoMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, csrf string) (map[string]any, error)
+	// ControllerInfo fetches unauthenticated controller diagnostics.
+	ControllerInfo(ctx context.Context) (map[string]any, error)
+	// ControllerVersion returns the controller version, fetching it if unknown.
+	ControllerVersion(ctx context.Context) (models.Version, error)
+	// BuildURL joins the endpoint onto the base under the current controller ID.
+	BuildURL(api, endpoint, site string) string
+	// CSRFToken returns the current CSRF token snapshot.
+	CSRFToken() string
+	// CloseIdleConnections releases pooled idle connections.
+	CloseIdleConnections()
+	// PagesV2 collects all pages of a legacy v2 GET endpoint.
+	PagesV2(ctx context.Context, endpoint, site string, params url.Values) ([]map[string]any, error)
+	// PagesOpenAPIPost collects all pages of an OpenAPI POST endpoint.
+	PagesOpenAPIPost(ctx context.Context, api, endpoint, site string, body map[string]any) ([]map[string]any, error)
+	// PagesOpenAPI collects all pages of an OpenAPI versioned POST endpoint.
+	PagesOpenAPI(ctx context.Context, version, endpoint, site string, body map[string]any) ([]map[string]any, error)
+	// PagesOpenAPIGet collects all pages of an OpenAPI GET endpoint.
+	PagesOpenAPIGet(ctx context.Context, api, endpoint, site string, params url.Values) ([]map[string]any, error)
+}
+
+// conn is the Connection implementation: HTTP + auth state.
 type conn struct {
 	base     string
 	host     string
@@ -34,6 +68,13 @@ type conn struct {
 	lastLogon    time.Time
 	jar          *permissiveJar
 	now          func() time.Time
+}
+
+// New creates a Connection for the controller at rawURL. The URL is
+// normalized: a missing scheme becomes https://, trailing slashes are
+// trimmed, and the bare host (no port) is recorded. No login is performed.
+func New(rawURL, username, password string, httpClient *http.Client) (Connection, error) {
+	return newConn(rawURL, username, password, httpClient)
 }
 
 // newConn normalizes the controller URL: a missing scheme becomes https://,
@@ -91,8 +132,15 @@ func (c *conn) clearLoginState() {
 	c.jar.ClearDomain(c.host)
 }
 
+// Login authenticates against the controller and returns the controller ID.
+func (c *conn) Login(ctx context.Context) (string, error) {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.login(ctx)
+}
+
 // login authenticates against the controller. It must be called with authMu
-// held (request() and New do this); it is not safe to call directly
+// held (Login and RequestEndpoint do this); it is not safe to call directly
 // concurrently with data requests.
 func (c *conn) login(ctx context.Context) (string, error) {
 	c.clearLoginState()
@@ -145,6 +193,13 @@ func (c *conn) checkLogin(ctx context.Context) (bool, error) {
 	return loggedIn, nil
 }
 
+// BuildURL joins the endpoint onto the base under the current controller ID.
+func (c *conn) BuildURL(api, endpoint, site string) string {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.buildURL(api, endpoint, site)
+}
+
 // buildURL joins the endpoint onto the base under the current controllerID.
 // Callers must hold authMu.
 func (c *conn) buildURL(api, endpoint, site string) string {
@@ -159,11 +214,11 @@ func (c *conn) buildURL(api, endpoint, site string) string {
 	}
 }
 
-// requestEndpoint performs an authenticated request, logging in (and
+// RequestEndpoint performs an authenticated request, logging in (and
 // re-logging in once, on auth-class failures) as needed. The URL is built
 // under authMu after the login decision so a concurrent first request can
 // never race on an empty controllerID.
-func (c *conn) requestEndpoint(ctx context.Context, method, api, endpoint, site string, query url.Values, body any) (map[string]any, error) {
+func (c *conn) RequestEndpoint(ctx context.Context, method, api, endpoint, site string, query url.Values, body any) (map[string]any, error) {
 	c.authMu.Lock()
 	ok, err := c.checkLogin(ctx)
 	if err == nil && !ok {
@@ -200,11 +255,11 @@ func (c *conn) requestEndpoint(ctx context.Context, method, api, endpoint, site 
 	return c.do(ctx, method, u, query, body, csrf)
 }
 
-// openapiRequest performs an authenticated OpenAPI-versioned request, logging
+// OpenapiRequest performs an authenticated OpenAPI-versioned request, logging
 // in (and re-logging in once, on auth-class failures) as needed. The URL is
 // built under authMu after the login decision so a concurrent first request
 // can never race on an empty controllerID.
-func (c *conn) openapiRequest(ctx context.Context, method, version, endpoint, site string, query url.Values, body any) (map[string]any, error) {
+func (c *conn) OpenapiRequest(ctx context.Context, method, version, endpoint, site string, query url.Values, body any) (map[string]any, error) {
 	c.authMu.Lock()
 	ok, err := c.checkLogin(ctx)
 	if err == nil && !ok {
@@ -278,10 +333,10 @@ func (c *conn) do(ctx context.Context, method, u string, query url.Values, body 
 	return c.perform(ctx, req)
 }
 
-// doMultipart performs a multipart form-data request and unwraps the Omada
+// DoMultipart performs a multipart form-data request and unwraps the Omada
 // response envelope. The caller supplies the csrf token to send (a snapshot
-// taken under authMu); doMultipart itself never touches shared auth state.
-func (c *conn) doMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, csrf string) (map[string]any, error) {
+// taken under authMu); DoMultipart itself never touches shared auth state.
+func (c *conn) DoMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, csrf string) (map[string]any, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	for name, value := range fields {
@@ -374,39 +429,51 @@ func (c *conn) checkAppErrors(content map[string]any) error {
 	return &models.RequestError{Code: code, Msg: msg}
 }
 
-// controllerInfo fetches unauthenticated controller diagnostics.
-func (c *conn) controllerInfo(ctx context.Context) (map[string]any, error) {
+// ControllerInfo fetches unauthenticated controller diagnostics.
+func (c *conn) ControllerInfo(ctx context.Context) (map[string]any, error) {
 	return c.do(ctx, "GET", c.base+"/api/info", nil, nil, "")
 }
 
-// controllerVersion returns the controller version, fetching it if unknown.
-func (c *conn) controllerVersion(ctx context.Context) (models.Version, error) {
+// ControllerVersion returns the controller version, fetching it if unknown.
+func (c *conn) ControllerVersion(ctx context.Context) (models.Version, error) {
 	c.authMu.Lock()
 	cached := c.version
 	c.authMu.Unlock()
 	if cached != "" {
 		return models.ParseVersion(cached)
 	}
-	info, err := c.controllerInfo(ctx)
+	info, err := c.ControllerInfo(ctx)
 	if err != nil {
 		return models.Version{}, err
 	}
 	return models.ParseVersion(models.MapStr(info, "controllerVer"))
 }
 
-// siteInfo fetches a site's detail object.
-func (c *conn) siteInfo(ctx context.Context, site string) (map[string]any, error) {
+// SiteInfo fetches a site's detail object.
+func (c *conn) SiteInfo(ctx context.Context, site string) (map[string]any, error) {
 	c.authMu.Lock()
 	csrf, id := c.csrf, c.controllerID
 	c.authMu.Unlock()
 	return c.do(ctx, "GET", c.base+"/"+id+"/api/v2/sites/"+site, nil, nil, csrf)
 }
 
-// siteVersion returns the site's reported version.
-func (c *conn) siteVersion(ctx context.Context, site string) (models.Version, error) {
-	info, err := c.siteInfo(ctx, site)
+// SiteVersion returns the site's reported version.
+func (c *conn) SiteVersion(ctx context.Context, site string) (models.Version, error) {
+	info, err := c.SiteInfo(ctx, site)
 	if err != nil {
 		return models.Version{}, err
 	}
 	return models.ParseVersion(models.MapStr(info, "controllerVer"))
+}
+
+// CSRFToken returns the current CSRF token snapshot.
+func (c *conn) CSRFToken() string {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.csrf
+}
+
+// CloseIdleConnections releases pooled idle connections.
+func (c *conn) CloseIdleConnections() {
+	c.client.CloseIdleConnections()
 }

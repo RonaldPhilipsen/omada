@@ -18,9 +18,9 @@ func (s *SiteClient) DhcpReservations(ctx context.Context) ([]models.DhcpReserva
 		listErr error
 	)
 	if version.Compare(models.ParseVersionMust("6.2.0.0")) >= 0 {
-		entries, listErr = s.c.pagesOpenAPIGet(ctx, "v1", "setting/service/dhcp", s.site, url.Values{})
+		entries, listErr = s.c.PagesOpenAPIGet(ctx, "v1", "setting/service/dhcp", s.site, url.Values{})
 	} else {
-		entries, listErr = s.c.pagesV2(ctx, "setting/service/dhcp", s.site, url.Values{})
+		entries, listErr = s.c.PagesV2(ctx, "setting/service/dhcp", s.site, url.Values{})
 	}
 	if listErr != nil {
 		return nil, listErr
@@ -60,7 +60,7 @@ func (s *SiteClient) CreateDhcpReservation(ctx context.Context, host, ip, mac st
 		"ip":       ip,
 		"mac":      mac,
 	}
-	m, err := s.c.openapiRequest(ctx, "POST", "v1", "setting/service/dhcp", s.site, nil, body)
+	m, err := s.c.OpenapiRequest(ctx, "POST", "v1", "setting/service/dhcp", s.site, nil, body)
 	if err != nil {
 		return models.DhcpReservation{}, err
 	}
@@ -98,7 +98,7 @@ func (s *SiteClient) UpdateDhcpReservation(ctx context.Context, update DhcpReser
 	if update.Host != nil {
 		body["description"] = *update.Host
 	}
-	m, err := s.c.openapiRequest(ctx, "PATCH", "v1", "setting/service/dhcp/"+mac, s.site, nil, body)
+	m, err := s.c.OpenapiRequest(ctx, "PATCH", "v1", "setting/service/dhcp/"+mac, s.site, nil, body)
 	if err != nil {
 		return models.DhcpReservation{}, err
 	}
@@ -114,6 +114,6 @@ func (s *SiteClient) DeleteDhcpReservation(ctx context.Context, ip string) error
 	if err != nil {
 		return err
 	}
-	_, err = s.c.openapiRequest(ctx, "DELETE", "v1", "setting/service/dhcp/"+strings.ToLower(existing.MAC()), s.site, nil, nil)
+	_, err = s.c.OpenapiRequest(ctx, "DELETE", "v1", "setting/service/dhcp/"+strings.ToLower(existing.MAC()), s.site, nil, nil)
 	return err
 }

@@ -1,4 +1,4 @@
-package controller
+package conn
 
 import (
 	"context"
@@ -68,9 +68,9 @@ func outcomeFrom(data map[string]any, requestedSize int) (pageOutcome, error) {
 	return out, nil
 }
 
-// pagesV2 collects all pages of a legacy v2 GET endpoint using
+// PagesV2 collects all pages of a legacy v2 GET endpoint using
 // currentPage/currentPageSize.
-func (c *conn) pagesV2(ctx context.Context, endpoint, site string, params url.Values) ([]map[string]any, error) {
+func (c *conn) PagesV2(ctx context.Context, endpoint, site string, params url.Values) ([]map[string]any, error) {
 	return c.collectPages(ctx, func(page int) (pageOutcome, error) {
 		q := make(map[string][]string, len(params))
 		for k, v := range params {
@@ -79,7 +79,7 @@ func (c *conn) pagesV2(ctx context.Context, endpoint, site string, params url.Va
 		query := url.Values(q)
 		query.Set("currentPage", strconv.Itoa(page))
 		query.Set("currentPageSize", strconv.Itoa(pageSize))
-		res, err := c.requestEndpoint(ctx, "GET", "v2", endpoint, site, query, nil)
+		res, err := c.RequestEndpoint(ctx, "GET", "v2", endpoint, site, query, nil)
 		if err != nil {
 			return pageOutcome{}, err
 		}
@@ -87,9 +87,9 @@ func (c *conn) pagesV2(ctx context.Context, endpoint, site string, params url.Va
 	})
 }
 
-// pagesOpenAPIPost collects all pages of an OpenAPI POST endpoint using
+// PagesOpenAPIPost collects all pages of an OpenAPI POST endpoint using
 // page/pageSize in the JSON body.
-func (c *conn) pagesOpenAPIPost(ctx context.Context, api, endpoint, site string, body map[string]any) ([]map[string]any, error) {
+func (c *conn) PagesOpenAPIPost(ctx context.Context, api, endpoint, site string, body map[string]any) ([]map[string]any, error) {
 	return c.collectPages(ctx, func(page int) (pageOutcome, error) {
 		b := make(map[string]any, len(body)+2)
 		for k, v := range body {
@@ -97,7 +97,7 @@ func (c *conn) pagesOpenAPIPost(ctx context.Context, api, endpoint, site string,
 		}
 		b["page"] = page
 		b["pageSize"] = pageSize
-		res, err := c.requestEndpoint(ctx, "POST", api, endpoint, site, nil, b)
+		res, err := c.RequestEndpoint(ctx, "POST", api, endpoint, site, nil, b)
 		if err != nil {
 			return pageOutcome{}, err
 		}
@@ -105,9 +105,9 @@ func (c *conn) pagesOpenAPIPost(ctx context.Context, api, endpoint, site string,
 	})
 }
 
-// pagesOpenAPI collects all pages of an OpenAPI versioned POST endpoint using
+// PagesOpenAPI collects all pages of an OpenAPI versioned POST endpoint using
 // page/pageSize in the JSON body.
-func (c *conn) pagesOpenAPI(ctx context.Context, version, endpoint, site string, body map[string]any) ([]map[string]any, error) {
+func (c *conn) PagesOpenAPI(ctx context.Context, version, endpoint, site string, body map[string]any) ([]map[string]any, error) {
 	return c.collectPages(ctx, func(page int) (pageOutcome, error) {
 		b := make(map[string]any, len(body)+2)
 		for k, v := range body {
@@ -115,7 +115,7 @@ func (c *conn) pagesOpenAPI(ctx context.Context, version, endpoint, site string,
 		}
 		b["page"] = page
 		b["pageSize"] = pageSize
-		res, err := c.openapiRequest(ctx, "POST", version, endpoint, site, nil, b)
+		res, err := c.OpenapiRequest(ctx, "POST", version, endpoint, site, nil, b)
 		if err != nil {
 			return pageOutcome{}, err
 		}
@@ -123,9 +123,9 @@ func (c *conn) pagesOpenAPI(ctx context.Context, version, endpoint, site string,
 	})
 }
 
-// pagesOpenAPIGet collects all pages of an OpenAPI GET endpoint using
+// PagesOpenAPIGet collects all pages of an OpenAPI GET endpoint using
 // page/pageSize query parameters.
-func (c *conn) pagesOpenAPIGet(ctx context.Context, api, endpoint, site string, params url.Values) ([]map[string]any, error) {
+func (c *conn) PagesOpenAPIGet(ctx context.Context, api, endpoint, site string, params url.Values) ([]map[string]any, error) {
 	return c.collectPages(ctx, func(page int) (pageOutcome, error) {
 		query := make(map[string][]string, len(params)+2)
 		for k, v := range params {
@@ -134,7 +134,7 @@ func (c *conn) pagesOpenAPIGet(ctx context.Context, api, endpoint, site string, 
 		uv := url.Values(query)
 		uv.Set("page", strconv.Itoa(page))
 		uv.Set("pageSize", strconv.Itoa(pageSize))
-		res, err := c.openapiRequest(ctx, "GET", api, endpoint, site, uv, nil)
+		res, err := c.OpenapiRequest(ctx, "GET", api, endpoint, site, uv, nil)
 		if err != nil {
 			return pageOutcome{}, err
 		}

@@ -2,24 +2,26 @@ package controller
 
 import (
 	"context"
-	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/url"
+
+	"github.com/RonaldPhilipsen/omada/controller/conn"
+	models "github.com/RonaldPhilipsen/omada/controller/models"
 )
 
 // SiteClient is the site-scoped API handle. Connection lifecycle belongs to the Controller.
 type SiteClient struct {
-	c    *conn
+	c    conn.Connection
 	site string
 }
 
 // SiteVersion returns the Omada version reported for the site.
 func (s *SiteClient) SiteVersion(ctx context.Context) (models.Version, error) {
-	return s.c.siteVersion(ctx, s.site)
+	return s.c.SiteVersion(ctx, s.site)
 }
 
 // Clients lists the clients visible to the site.
 func (s *SiteClient) Clients(ctx context.Context) ([]models.Client, error) {
-	entries, err := s.c.pagesV2(ctx, "clients", s.site, url.Values{"limit": {"1000"}})
+	entries, err := s.c.PagesV2(ctx, "clients", s.site, url.Values{"limit": {"1000"}})
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +37,7 @@ func (s *SiteClient) Client(ctx context.Context, mac string) (models.Client, err
 	if mac == "" {
 		return models.Client{}, &models.ValidationError{Msg: "client MAC must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "clients/"+mac, s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "clients/"+mac, s.site, nil, nil)
 	if err != nil {
 		return models.Client{}, err
 	}
@@ -50,7 +52,7 @@ func (s *SiteClient) ClientByID(ctx context.Context, deviceIndex string) (models
 	if deviceIndex == "" {
 		return models.Client{}, &models.ValidationError{Msg: "client device index must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "clients/"+deviceIndex, s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "clients/"+deviceIndex, s.site, nil, nil)
 	if err != nil {
 		return models.Client{}, err
 	}
@@ -65,7 +67,7 @@ func (s *SiteClient) BlockClient(ctx context.Context, mac string) error {
 	if mac == "" {
 		return &models.ValidationError{Msg: "client MAC must not be empty"}
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "cmd/clients/"+mac+"/block", s.site, nil, nil)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "cmd/clients/"+mac+"/block", s.site, nil, nil)
 	return err
 }
 
@@ -74,7 +76,7 @@ func (s *SiteClient) UnblockClient(ctx context.Context, mac string) error {
 	if mac == "" {
 		return &models.ValidationError{Msg: "client MAC must not be empty"}
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "cmd/clients/"+mac+"/unblock", s.site, nil, nil)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "cmd/clients/"+mac+"/unblock", s.site, nil, nil)
 	return err
 }
 
@@ -83,7 +85,7 @@ func (s *SiteClient) ReconnectClient(ctx context.Context, mac string) error {
 	if mac == "" {
 		return &models.ValidationError{Msg: "client MAC must not be empty"}
 	}
-	_, err := s.c.requestEndpoint(ctx, "POST", "v2", "cmd/clients/"+mac+"/reconnect", s.site, nil, nil)
+	_, err := s.c.RequestEndpoint(ctx, "POST", "v2", "cmd/clients/"+mac+"/reconnect", s.site, nil, nil)
 	return err
 }
 
@@ -120,7 +122,7 @@ func (s *SiteClient) UpdateClientSettings(ctx context.Context, mac string, name 
 			"upUnit":     rateLimit.UpUnit(),
 		}
 	}
-	_, err := s.c.requestEndpoint(ctx, "PATCH", "v2", "clients/"+mac, s.site, nil, payload)
+	_, err := s.c.RequestEndpoint(ctx, "PATCH", "v2", "clients/"+mac, s.site, nil, payload)
 	return err
 }
 
@@ -137,7 +139,7 @@ func (s *SiteClient) ConnectedClients(ctx context.Context) ([]models.Client, err
 			"hideHealthUnsupported": true,
 			"scope":                 1,
 		}
-		entries, err := s.c.pagesOpenAPI(ctx, "v2", "clients", s.site, body)
+		entries, err := s.c.PagesOpenAPI(ctx, "v2", "clients", s.site, body)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +149,7 @@ func (s *SiteClient) ConnectedClients(ctx context.Context) ([]models.Client, err
 		}
 		return clients, nil
 	}
-	entries, err := s.c.pagesV2(ctx, "clients", s.site, url.Values{"filters.active": {"false"}})
+	entries, err := s.c.PagesV2(ctx, "clients", s.site, url.Values{"filters.active": {"false"}})
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +166,7 @@ func (s *SiteClient) ConnectedClients(ctx context.Context) ([]models.Client, err
 // Networks lists the LAN networks of the site.
 func (s *SiteClient) Networks(ctx context.Context) ([]models.LanNetwork, error) {
 	body := map[string]any{"type": "lan"}
-	entries, err := s.c.pagesOpenAPI(ctx, "v2", "lan-networks", s.site, body)
+	entries, err := s.c.PagesOpenAPI(ctx, "v2", "lan-networks", s.site, body)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +206,7 @@ func (s *SiteClient) CreateVLAN(ctx context.Context, name string, vlanID int) (m
 	if err := models.ValidateVlanConflicts(create.Payload(), networks, nil); err != nil {
 		return models.LanNetwork{}, err
 	}
-	m, err := s.c.openapiRequest(ctx, "POST", "v2", "lan-networks", s.site, nil, create.Payload())
+	m, err := s.c.OpenapiRequest(ctx, "POST", "v2", "lan-networks", s.site, nil, create.Payload())
 	if err != nil {
 		return models.LanNetwork{}, err
 	}
@@ -221,7 +223,7 @@ func (s *SiteClient) UpdateVLAN(ctx context.Context, network models.LanNetwork, 
 	if err != nil {
 		return models.LanNetwork{}, err
 	}
-	m, err := s.c.openapiRequest(ctx, "PATCH", "v2", "lan-networks/"+network.ID(), s.site, nil, payload)
+	m, err := s.c.OpenapiRequest(ctx, "PATCH", "v2", "lan-networks/"+network.ID(), s.site, nil, payload)
 	if err != nil {
 		return models.LanNetwork{}, err
 	}
@@ -230,7 +232,7 @@ func (s *SiteClient) UpdateVLAN(ctx context.Context, network models.LanNetwork, 
 
 // KnownClients lists the clients known to the site.
 func (s *SiteClient) KnownClients(ctx context.Context) ([]models.Client, error) {
-	entries, err := s.c.pagesV2(ctx, "insight/clients", s.site, url.Values{})
+	entries, err := s.c.PagesV2(ctx, "insight/clients", s.site, url.Values{})
 	if err != nil {
 		return nil, err
 	}

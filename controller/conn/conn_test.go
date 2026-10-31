@@ -1,4 +1,4 @@
-package controller
+package conn
 
 import (
 	"context"
@@ -151,7 +151,7 @@ func TestLoginFlow(t *testing.T) {
 	if c.csrf != "tok1" {
 		t.Errorf("csrf = %q", c.csrf)
 	}
-	if _, err := c.requestEndpoint(context.Background(), "GET", "v2", "loginStatus", "", nil, nil); err != nil {
+	if _, err := c.RequestEndpoint(context.Background(), "GET", "v2", "loginStatus", "", nil, nil); err != nil {
 		t.Fatalf("request: %v", err)
 	}
 	if got := ts.countSpec("POST /abc/api/v2/login"); got != 1 {
@@ -202,7 +202,7 @@ func TestReLoginOnLoginFailedThenRetry(t *testing.T) {
 	})
 	c := newTestConn(t, ts, 0)
 
-	res, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
+	res, err := c.RequestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestNonJSON200IsSessionClosed(t *testing.T) {
 	// First request fails with session closed; re-login happens; the retry
 	// hits the same handler, which keeps returning HTML, so the second
 	// attempt must surface models.ErrLoginSessionClosed.
-	if _, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil); !errors.Is(err, models.ErrLoginSessionClosed) {
+	if _, err := c.RequestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil); !errors.Is(err, models.ErrLoginSessionClosed) {
 		t.Errorf("got %v, want models.ErrLoginSessionClosed", err)
 	}
 }
@@ -241,7 +241,7 @@ func TestApplicationErrorCodeNoRelogin(t *testing.T) {
 	})
 	c := newTestConn(t, ts, 0)
 
-	_, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
+	_, err := c.RequestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
 	var re *models.RequestError
 	if !errors.As(err, &re) || re.Code != 8101 {
 		t.Fatalf("got %v, want models.RequestError 8101", err)
@@ -260,7 +260,7 @@ func TestCheckLoginTransientErrorPropagates(t *testing.T) {
 	c := newTestConn(t, ts, 0)
 	c.lastLogon = c.now().Add(-2 * time.Hour)
 
-	_, err := c.requestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
+	_, err := c.RequestEndpoint(context.Background(), "GET", "v2", "devices", "", nil, nil)
 	var re *models.RequestError
 	if !errors.As(err, &re) || re.Code != 500 {
 		t.Fatalf("got %v, want models.RequestError 500", err)
@@ -293,7 +293,7 @@ func TestConcurrentFirstRequestsNoRace(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := c.requestEndpoint(context.Background(), "GET", "v2", "loginStatus", "", nil, nil); err != nil {
+			if _, err := c.RequestEndpoint(context.Background(), "GET", "v2", "loginStatus", "", nil, nil); err != nil {
 				t.Errorf("concurrent request: %v", err)
 			}
 		}()
@@ -310,14 +310,14 @@ func TestControllerInfoUnauthenticated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	info, err := c.controllerInfo(context.Background())
+	info, err := c.ControllerInfo(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if info["omadacId"] != "abc" {
 		t.Errorf("info: %v", info)
 	}
-	v, err := c.controllerVersion(context.Background())
+	v, err := c.ControllerVersion(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

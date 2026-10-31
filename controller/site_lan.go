@@ -10,7 +10,7 @@ import (
 
 // LanNetworks lists the LAN networks of the site.
 func (s *SiteClient) LanNetworks(ctx context.Context) ([]models.LanNetwork, error) {
-	entries, err := s.c.pagesV2(ctx, "lanNetworks", s.site, url.Values{"type": {"lan"}})
+	entries, err := s.c.PagesV2(ctx, "lanNetworks", s.site, url.Values{"type": {"lan"}})
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (s *SiteClient) LanNetwork(ctx context.Context, id string) (models.LanNetwo
 	if id == "" {
 		return models.LanNetwork{}, &models.ValidationError{Msg: "network ID must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "lanNetworks/"+id, s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "lanNetworks/"+id, s.site, nil, nil)
 	if err != nil {
 		return models.LanNetwork{}, err
 	}
@@ -72,7 +72,7 @@ func (s *SiteClient) CreateLanNetwork(ctx context.Context, create LanNetworkCrea
 		"name": create.Name,
 		"vlan": create.VLAN,
 	}
-	m, err := s.c.requestEndpoint(ctx, "POST", "v2", "lanNetworks", s.site, nil, body)
+	m, err := s.c.RequestEndpoint(ctx, "POST", "v2", "lanNetworks", s.site, nil, body)
 	if err != nil {
 		return models.LanNetwork{}, err
 	}
@@ -137,7 +137,7 @@ func (s *SiteClient) UpdateLanNetwork(ctx context.Context, update LanNetworkUpda
 	if update.DNSServers != nil {
 		body["dnsServers"] = update.DNSServers
 	}
-	m, err := s.c.requestEndpoint(ctx, "PUT", "v2", "lanNetworks/"+update.NetworkID, s.site, nil, body)
+	m, err := s.c.RequestEndpoint(ctx, "PUT", "v2", "lanNetworks/"+update.NetworkID, s.site, nil, body)
 	if err != nil {
 		return models.LanNetwork{}, err
 	}
@@ -154,7 +154,7 @@ type VlanDelete struct {
 
 // PreviewVlanCreate previews a VLAN-only network creation.
 func (s *SiteClient) PreviewVlanCreate(ctx context.Context, create models.VlanCreate) (map[string]any, error) {
-	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, create.Payload())
+	m, err := s.c.OpenapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, create.Payload())
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (s *SiteClient) PreviewVlanCreate(ctx context.Context, create models.VlanCr
 
 // VlanCreate creates a VLAN-only network; it does not configure routing or DHCP.
 func (s *SiteClient) VlanCreate(ctx context.Context, create models.VlanCreate) (map[string]any, error) {
-	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlans", s.site, nil, create.Payload())
+	m, err := s.c.OpenapiRequest(ctx, "POST", "v2", "vlans", s.site, nil, create.Payload())
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (s *SiteClient) PreviewVlanUpdate(ctx context.Context, update models.VlanUp
 	if update.VLANID() != nil {
 		body["vlan"] = *update.VLANID()
 	}
-	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, body)
+	m, err := s.c.OpenapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func (s *SiteClient) VlanUpdate(ctx context.Context, update models.VlanUpdate) (
 	if update.VLANID() != nil {
 		body["vlan"] = *update.VLANID()
 	}
-	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlans", s.site, nil, body)
+	m, err := s.c.OpenapiRequest(ctx, "POST", "v2", "vlans", s.site, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func (s *SiteClient) VlanUpdate(ctx context.Context, update models.VlanUpdate) (
 // PreviewVlanDelete previews a VLAN-only network deletion.
 func (s *SiteClient) PreviewVlanDelete(ctx context.Context, del VlanDelete) (map[string]any, error) {
 	body := map[string]any{"vlan": del.VLAN}
-	m, err := s.c.openapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, body)
+	m, err := s.c.OpenapiRequest(ctx, "POST", "v2", "vlan/preview", s.site, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (s *SiteClient) PreviewVlanDelete(ctx context.Context, del VlanDelete) (map
 
 // VlanDelete deletes a VLAN-only network.
 func (s *SiteClient) VlanDelete(ctx context.Context, del VlanDelete) (map[string]any, error) {
-	m, err := s.c.openapiRequest(ctx, "DELETE", "v2", "vlans/"+strconv.Itoa(del.VLAN), s.site, nil, nil)
+	m, err := s.c.OpenapiRequest(ctx, "DELETE", "v2", "vlans/"+strconv.Itoa(del.VLAN), s.site, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (s *SiteClient) VlanDelete(ctx context.Context, del VlanDelete) (map[string
 
 // verifyVlan reads back a VLAN write outcome after a successful mutation.
 func (s *SiteClient) verifyVlan(ctx context.Context, vlan int) error {
-	m, err := s.c.openapiRequest(ctx, "GET", "v2", "vlans", s.site, url.Values{"vlan": {strconv.Itoa(vlan)}}, nil)
+	m, err := s.c.OpenapiRequest(ctx, "GET", "v2", "vlans", s.site, url.Values{"vlan": {strconv.Itoa(vlan)}}, nil)
 	if err != nil {
 		return fmt.Errorf("write may have succeeded; inspect controller state before retrying: %w", err)
 	}

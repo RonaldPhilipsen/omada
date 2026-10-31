@@ -10,7 +10,7 @@ import (
 
 // AccessPoints lists the access points visible to the site.
 func (s *SiteClient) AccessPoints(ctx context.Context) ([]models.AccessPoint, error) {
-	entries, err := s.c.pagesV2(ctx, "accessPoints", s.site, url.Values{"deviceType": {"accessPoint"}})
+	entries, err := s.c.PagesV2(ctx, "accessPoints", s.site, url.Values{"deviceType": {"accessPoint"}})
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (s *SiteClient) AccessPoint(ctx context.Context, deviceID string) (models.A
 	if deviceID == "" {
 		return models.AccessPoint{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "accessPoints/"+deviceID, s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "accessPoints/"+deviceID, s.site, nil, nil)
 	if err != nil {
 		return models.AccessPoint{}, err
 	}
@@ -42,7 +42,7 @@ func (s *SiteClient) AccessPointsByMAC(ctx context.Context, macs []string) ([]mo
 		return nil, &models.ValidationError{Msg: "MAC list must not be empty"}
 	}
 	joined := strings.Join(macs, ",")
-	m, err := s.c.openapiRequest(ctx, "GET", "v2", "accessPoints", s.site, url.Values{"mac": {joined}}, nil)
+	m, err := s.c.OpenapiRequest(ctx, "GET", "v2", "accessPoints", s.site, url.Values{"mac": {joined}}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (s *SiteClient) ApPorts(ctx context.Context, deviceID string) ([]models.APL
 	if deviceID == "" {
 		return nil, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	m, err := s.c.openapiRequest(ctx, "GET", "v2", "accessPoints/"+deviceID+"/portConfig", s.site, nil, nil)
+	m, err := s.c.OpenapiRequest(ctx, "GET", "v2", "accessPoints/"+deviceID+"/portConfig", s.site, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *SiteClient) SetApPortEnabled(ctx context.Context, deviceID string, port
 		"enable":    enabled,
 		"poeEnable": poe,
 	}
-	_, err := s.c.openapiRequest(ctx, "PATCH", "v2", "accessPoints/"+deviceID+"/portConfig", s.site, nil, body)
+	_, err := s.c.OpenapiRequest(ctx, "PATCH", "v2", "accessPoints/"+deviceID+"/portConfig", s.site, nil, body)
 	return err
 }
 
@@ -109,7 +109,7 @@ func (s *SiteClient) SetApRadioEnabled(ctx context.Context, deviceID string, rad
 		return err
 	}
 	settings.Raw()["radioEnable"] = enabled
-	_, err = s.c.requestEndpoint(ctx, "PATCH", "v2", "accessPoints/"+deviceID+"/radioConfig", s.site, nil, settings.Raw())
+	_, err = s.c.RequestEndpoint(ctx, "PATCH", "v2", "accessPoints/"+deviceID+"/radioConfig", s.site, nil, settings.Raw())
 	return err
 }
 
@@ -121,13 +121,13 @@ func (s *SiteClient) SetApRadioChannel(ctx context.Context, deviceID string, rad
 	}
 	settings.Raw()["channel"] = channel
 	settings.Raw()["channelWidth"] = int(channelWidth)
-	_, err = s.c.requestEndpoint(ctx, "PATCH", "v2", "accessPoints/"+deviceID+"/radioConfig", s.site, nil, settings.Raw())
+	_, err = s.c.RequestEndpoint(ctx, "PATCH", "v2", "accessPoints/"+deviceID+"/radioConfig", s.site, nil, settings.Raw())
 	return err
 }
 
 // ApAvailableChannels returns the channels available on the access point radio.
 func (s *SiteClient) ApAvailableChannels(ctx context.Context, deviceID string, radioID int) ([]int, error) {
-	m, err := s.c.openapiRequest(ctx, "GET", "v2", "accessPoints/"+deviceID+"/radioConfig/availableChannels", s.site, nil, nil)
+	m, err := s.c.OpenapiRequest(ctx, "GET", "v2", "accessPoints/"+deviceID+"/radioConfig/availableChannels", s.site, nil, nil)
 	if err != nil {
 		return nil, err
 	}

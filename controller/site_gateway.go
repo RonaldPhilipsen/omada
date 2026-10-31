@@ -9,7 +9,7 @@ import (
 
 // Gateways lists the gateways visible to the site.
 func (s *SiteClient) Gateways(ctx context.Context) ([]models.Gateway, error) {
-	entries, err := s.c.pagesV2(ctx, "gateways", s.site, url.Values{"deviceType": {"gateway"}})
+	entries, err := s.c.PagesV2(ctx, "gateways", s.site, url.Values{"deviceType": {"gateway"}})
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func (s *SiteClient) Gateway(ctx context.Context, deviceID string) (models.Gatew
 	if deviceID == "" {
 		return models.Gateway{}, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "gateways/"+deviceID, s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "gateways/"+deviceID, s.site, nil, nil)
 	if err != nil {
 		return models.Gateway{}, err
 	}
@@ -64,7 +64,7 @@ func (s *SiteClient) SetGatewayWanPortConnectState(ctx context.Context, deviceID
 		operation = 1
 	}
 	body := map[string]any{"portId": portIndex, "operation": operation}
-	m, err := s.c.requestEndpoint(ctx, "POST", "v2", "gateways/"+deviceID+"/internetState", s.site, nil, body)
+	m, err := s.c.RequestEndpoint(ctx, "POST", "v2", "gateways/"+deviceID+"/internetState", s.site, nil, body)
 	if err != nil {
 		return models.GatewayPortStatus{}, err
 	}
@@ -108,7 +108,7 @@ func (s *SiteClient) GatewayPorts(ctx context.Context, deviceID string) ([]Gatew
 	if deviceID == "" {
 		return nil, &models.ValidationError{Msg: "device ID must not be empty"}
 	}
-	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "gateways/"+deviceID+"/portConfig", s.site, nil, nil)
+	m, err := s.c.RequestEndpoint(ctx, "GET", "v2", "gateways/"+deviceID+"/portConfig", s.site, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (s *SiteClient) SetGatewayPortSettings(ctx context.Context, deviceID string
 	if enabled != nil {
 		merged["enable"] = *enabled
 	}
-	_, err = s.c.requestEndpoint(ctx, "PATCH", "v2", "gateways/"+deviceID+"/portConfig", s.site, nil, merged)
+	_, err = s.c.RequestEndpoint(ctx, "PATCH", "v2", "gateways/"+deviceID+"/portConfig", s.site, nil, merged)
 	return err
 }
 
@@ -167,6 +167,6 @@ func (s *SiteClient) SetGatewayPoE(ctx context.Context, deviceID string, portInd
 		"port": portIndex,
 		"poe":  int(state),
 	}
-	_, err := s.c.requestEndpoint(ctx, "PATCH", "v2", "gateways/"+deviceID+"/portConfig", s.site, nil, body)
+	_, err := s.c.RequestEndpoint(ctx, "PATCH", "v2", "gateways/"+deviceID+"/portConfig", s.site, nil, body)
 	return err
 }
