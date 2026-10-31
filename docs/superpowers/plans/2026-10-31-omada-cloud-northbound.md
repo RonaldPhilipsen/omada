@@ -133,7 +133,7 @@ git commit -m "feat: add northbound spec tooling (fetch, patch, tag mapping, ver
 
 **Interfaces:**
 - Consumes: Task 1's `gen/api-docs.patched.json`, `gen/tags.json`, verify command.
-- Produces: 19 Go packages, each exposing the oapi-codegen surface: `type Client interface`, `func NewClient(server string) (Client, ...)`, `func NewClientWithRequestEditor(server string, editors ...RequestEditorFn) (Client, error)`, plus all generated model types. Task 4's accessors call `NewClientWithRequestEditor` on each.
+- Produces: 19 Go packages, each exposing the oapi-codegen **v2** surface: concrete `type Client struct` (fields `Server string`, `Client HttpRequestDoer`), `func NewClient(server string, opts ...ClientOption) (*Client, error)`, options `WithHTTPClient(doer HttpRequestDoer) ClientOption` and `WithRequestEditorFn(fn RequestEditorFn) ClientOption`, plus all generated model types. Package names: `cloud/switch/` declares `package switchpkg` (`switch` is a Go reserved word); `cloud/log/` declares `package log`. Task 4's accessors call `NewClient` with `WithHTTPClient` on each.
 
 - [ ] **Step 1: Write `gen/gen_configs.py`**
 
@@ -262,7 +262,7 @@ git commit -m "feat: add northbound token provider (client-credentials, cached)"
 - Test: `cloud/cloud_test.go`
 
 **Interfaces:**
-- Consumes: `NewTokenProvider`/`TokenProvider` (Task 3); the 19 generated packages' `NewClientWithRequestEditor(server string, editors ...RequestEditorFn) (Client, error)` (Task 2).
+- Consumes: `NewTokenProvider`/`TokenProvider` (Task 3); the 19 generated packages' `NewClient(server string, opts ...ClientOption) (*Client, error)` and `WithHTTPClient(doer HttpRequestDoer) ClientOption` (Task 2).
 - Produces:
 
 ```go
@@ -274,28 +274,28 @@ type Options struct {
 }
 func New(opts Options) (*Client, error)
 type Client struct { /* baseURL string, tp *TokenProvider, httpClient *http.Client */ }
-func (c *Client) Site() site.Client
-func (c *Client) Clients() client.Client
-func (c *Client) Devices() device.Client
-func (c *Client) Ap() ap.Client
-func (c *Client) Switch() switchpkg.Client   // import "github.com/RonaldPhilipsen/omada/cloud/switch" as switchpkg
-func (c *Client) Gateway() gateway.Client
-func (c *Client) Lan() lan.Client
-func (c *Client) Wireless() wireless.Client
-func (c *Client) Vpn() vpn.Client
-func (c *Client) Security() security.Client
-func (c *Client) Insight() insight.Client
-func (c *Client) Users() user.Client
-func (c *Client) Msp() msp.Client
-func (c *Client) Stack() stack.Client
-func (c *Client) Voip() voip.Client
-func (c *Client) Sim() sim.Client
-func (c *Client) OmadaLog() omadalog.Client  // import "cloud/log" as omadalog (name clash with stdlib log)
-func (c *Client) Topology() topology.Client
-func (c *Client) Remote() remote.Client
+func (c *Client) Site() *site.Client
+func (c *Client) Clients() *client.Client
+func (c *Client) Devices() *device.Client
+func (c *Client) Ap() *ap.Client
+func (c *Client) Switch() *switchpkg.Client   // import "github.com/RonaldPhilipsen/omada/cloud/switch" (declares package switchpkg)
+func (c *Client) Gateway() *gateway.Client
+func (c *Client) Lan() *lan.Client
+func (c *Client) Wireless() *wireless.Client
+func (c *Client) Vpn() *vpn.Client
+func (c *Client) Security() *security.Client
+func (c *Client) Insight() *insight.Client
+func (c *Client) Users() *user.Client
+func (c *Client) Msp() *msp.Client
+func (c *Client) Stack() *stack.Client
+func (c *Client) Voip() *voip.Client
+func (c *Client) Sim() *sim.Client
+func (c *Client) OmadaLog() *omadalog.Client  // import "cloud/log" as omadalog (declares package log; name clash with stdlib log)
+func (c *Client) Topology() *topology.Client
+func (c *Client) Remote() *remote.Client
 ```
 
-Auth: an `authTransport` (`http.RoundTripper`) wraps the base transport; on each `RoundTrip` it calls `tp.Token(ctx)` and sets `Authorization: Bearer <token>`; if the response is 401 it calls `tp.Invalidate()`, re-fetches, clones the request with the new header, and retries once; a second 401 is returned as-is. `New` wires `&http.Client{Transport: authTransport{...}}`.
+Auth: an `authTransport` (`http.RoundTripper`) wraps the base transport; on each `RoundTrip` it calls `tp.Token(ctx)` and sets `Authorization: Bearer <token>`; if the response is 401 it calls `tp.Invalidate()`, re-fetches, clones the request with the new header, and retries once; a second 401 is returned as-is. `New` wires `c.httpClient = &http.Client{Transport: authTransport{...}}` (or wraps `opts.HTTPClient`'s transport when provided). Each accessor passes that client to the generated one via `WithHTTPClient`, so every generated operation flows through the auth transport.
 
 - [ ] **Step 1: Write the failing tests** in `cloud/cloud_test.go`
 
@@ -320,7 +320,7 @@ Expected: build failure (`undefined: New`).
 
 - [ ] **Step 3: Implement `cloud/cloud.go`**
 
-`Options`, `New`, `Client`, `authTransport`, and the 19 accessors per the Interfaces block. Accessors call the package's `NewClientWithRequestEditor(c.baseURL)` (no editors needed — the transport owns the header); return the generated `Client` interface. `New` returns an error for empty `Username`/`Password`; default `BaseURL` when empty (strip trailing slash).
+`Options`, `New`, `Client`, `authTransport`, and the 19 accessors per the Interfaces block. Each accessor calls `pkg.NewClient(c.baseURL, pkg.WithHTTPClient(c.httpClient))` (no request editors needed — the transport owns the header), discards the returned error (it cannot fail for a valid base URL), and returns the concrete `*pkg.Client`. `New` returns an error for empty `Username`/`Password`; default `BaseURL` when empty (strip trailing slash).
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -423,7 +423,7 @@ git commit -m "feat: add APIError envelope helper and bounded paging collector"
 - Test: `cloud/<pkg>/<pkg>_test.go` for each of the 19 packages
 
 **Interfaces:**
-- Consumes: the generated packages' `NewClientWithRequestEditor` and operation methods (Task 2); `cloud.NewAPIError` (Task 5) in the `site` package's envelope test.
+- Consumes: the generated packages' `NewClient(server, opts ...ClientOption) (*Client, error)` and operation methods (Task 2); `cloud.NewAPIError` (Task 5) in the `site` package's envelope test.
 - Produces: nothing (verification layer).
 
 Per package, write one test file with **three tests**:
