@@ -146,3 +146,136 @@ func TestSetGatewayPoE(t *testing.T) {
 		t.Errorf("SetGatewayPoE body = %v, want port 1 poe enabled", body)
 	}
 }
+
+func TestGetGatewayPort(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01" {
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+				"id": "AA:BB:CC:DD:EE:01",
+				"portConfigs": []map[string]any{
+					{"port": 1, "name": "WAN", "type": 1},
+					{"port": 2, "name": "LAN", "type": 2},
+				},
+			}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	cfg, err := sc.GetGatewayPort(context.Background(), "AA:BB:CC:DD:EE:01", 1)
+	if err != nil {
+		t.Fatalf("GetGatewayPort() error = %v", err)
+	}
+	if cfg.PortNumber() != 1 {
+		t.Errorf("GetGatewayPort() = %+v, want port 1", cfg)
+	}
+}
+
+func TestGetGatewayPortEmptyID(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	if _, err := sc.GetGatewayPort(context.Background(), "", 1); err == nil {
+		t.Fatal("GetGatewayPort() expected error for empty device ID")
+	} else {
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("GetGatewayPort() error = %v, want *ValidationError", err)
+		}
+	}
+}
+
+func TestGetGatewayPortMiss(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01" {
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+				"id": "AA:BB:CC:DD:EE:01",
+				"portConfigs": []map[string]any{
+					{"port": 1, "name": "WAN", "type": 1},
+				},
+			}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	if _, err := sc.GetGatewayPort(context.Background(), "AA:BB:CC:DD:EE:01", 9); err == nil {
+		t.Fatal("GetGatewayPort() expected error for missing port")
+	} else {
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("GetGatewayPort() error = %v, want *ValidationError", err)
+		}
+	}
+}
+
+func TestSetGatewayWanPortConnectState(t *testing.T) {
+	var body map[string]any
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/internetState" {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode body: %v", err)
+				return
+			}
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+				"port":          1,
+				"internetState": 1,
+			}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	status, err := sc.SetGatewayWanPortConnectState(context.Background(), "AA:BB:CC:DD:EE:01", 1, true)
+	if err != nil {
+		t.Fatalf("SetGatewayWanPortConnectState() error = %v", err)
+	}
+	if body["portId"] != float64(1) || body["operation"] != float64(1) {
+		t.Errorf("SetGatewayWanPortConnectState body = %v, want portId 1 operation 1", body)
+	}
+	if !status.WANConnected() {
+		t.Errorf("SetGatewayWanPortConnectState() WANConnected = false, want true")
+	}
+
+	cl2 := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/internetState" {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode body: %v", err)
+				return
+			}
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+				"port":          1,
+				"internetState": 0,
+			}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc2 := &SiteClient{c: cl2.c, site: "site-1"}
+	status2, err := sc2.SetGatewayWanPortConnectState(context.Background(), "AA:BB:CC:DD:EE:01", 1, false)
+	if err != nil {
+		t.Fatalf("SetGatewayWanPortConnectState() error = %v", err)
+	}
+	if body["operation"] != float64(0) {
+		t.Errorf("SetGatewayWanPortConnectState body operation = %v, want 0", body["operation"])
+	}
+	if status2.WANConnected() {
+		t.Errorf("SetGatewayWanPortConnectState() WANConnected = true, want false")
+	}
+}
+
+func TestSetGatewayWanPortConnectStateEmptyID(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	if _, err := sc.SetGatewayWanPortConnectState(context.Background(), "", 1, true); err == nil {
+		t.Fatal("SetGatewayWanPortConnectState() expected error for empty device ID")
+	} else {
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("SetGatewayWanPortConnectState() error = %v, want *ValidationError", err)
+		}
+	}
+}

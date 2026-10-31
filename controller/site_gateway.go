@@ -34,6 +34,42 @@ func (s *SiteClient) Gateway(ctx context.Context, deviceID string) (Gateway, err
 	return NewGateway(m), nil
 }
 
+// GetGatewayPort returns the configuration of a single gateway port.
+func (s *SiteClient) GetGatewayPort(ctx context.Context, deviceID string, portIndex int) (*GatewayPortConfig, error) {
+	if deviceID == "" {
+		return nil, &ValidationError{Msg: "device ID must not be empty"}
+	}
+	gw, err := s.Gateway(ctx, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range gw.PortConfigs() {
+		if entry.PortNumber() == portIndex {
+			cfg := entry
+			return &cfg, nil
+		}
+	}
+	return nil, &ValidationError{Msg: "gateway port not found"}
+}
+
+// SetGatewayWanPortConnectState connects or disconnects a gateway WAN port
+// and returns the resulting port status.
+func (s *SiteClient) SetGatewayWanPortConnectState(ctx context.Context, deviceID string, portIndex int, connect bool) (GatewayPortStatus, error) {
+	if deviceID == "" {
+		return GatewayPortStatus{}, &ValidationError{Msg: "device ID must not be empty"}
+	}
+	operation := 0
+	if connect {
+		operation = 1
+	}
+	body := map[string]any{"portId": portIndex, "operation": operation}
+	m, err := s.c.requestEndpoint(ctx, "POST", "v2", "gateways/"+deviceID+"/internetState", s.site, nil, body)
+	if err != nil {
+		return GatewayPortStatus{}, err
+	}
+	return NewGatewayPortStatus(m), nil
+}
+
 // GatewayPortSettings is the effective configuration of a gateway port.
 type GatewayPortSettings struct {
 	data map[string]any
