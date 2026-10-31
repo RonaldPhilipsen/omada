@@ -1,1 +1,4 @@
 .worktrees/
+gen/api-docs.json
+gen/api-docs.patched.json
+gen/configs/

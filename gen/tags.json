@@ -1,0 +1,21 @@
+{
+ "ap": ["Ap", "Rrm", "Wi-Fi Calling Traffic", "WLAN Optimization"],
+ "client": ["Authorized Client", "Client", "Client Insight", "Hotspot Operators", "Intelli Recover Client", "Voucher"],
+ "device": ["Backup and Restore", "Backup schedule", "Device", "Device Management Setting", "Firmware", "Intelli Recover Device", "Schedule", "Schedule (Template)"],
+ "gateway": ["CertProfiles", "CertProfiles (Template)", "EoGRE Tunnel", "Gateway", "Gateway (Template)", "Gateway QOS (Template)", "Gateway QoS", "IPTV", "IPTV (Template)", "OSPF", "SD-WAN", "SNMP", "SNMP (Template)", "VRRP"],
+ "insight": ["Dashboard", "Global Dashboard Overview", "Health", "History Data Retention", "Incident (Template)", "Incidents", "Insight", "Network Analyze", "Network Report", "Report v2", "Statistic"],
+ "lan": ["DHCP Reservation", "DNS", "DNS (Template)", "Disable Nat", "Lan Multicast", "Lan Multicast (Template)", "NAT", "NAT (Template)", "Routing", "Routing (Template)", "Wired Network", "Wired Network (Template)", "mDNS", "mDNS (Template)"],
+ "log": ["Audit Log", "Audit Log (Template)", "CLI", "CLI (Template)", "Log", "Log (Template)", "Webhook Setting"],
+ "msp": ["MSP Device", "MSP History Data Retention", "MSP SSO", "MSP User and Role", "Msp License", "Msp Log", "Msp Webhook Setting", "Msp setting"],
+ "remote": ["Remote Access", "SSH", "SSH (Template)", "Service (Template)", "UPnP", "UPnP (Template)"],
+ "security": ["ACL", "ACL (Template)", "Arp Detection", "Access Control", "Access Control (Template)", "Application Control", "Attack Defense", "Attack Defense (Template)", "Bandwidth Control", "Bandwidth Control (Template)", "Dhcp Snooping", "Firewall", "Firewall (Template)", "Global Security", "IDS/IPS", "IDS/IPS (Template)", "IP-MAC Binding", "IP-MAC Binding (Template)", "MAC Filtering", "MAC Filtering (Template)", "Session Limit", "Session Limit (Template)", "Threat Management", "URL Filtering", "URL Filtering (Template)", "Wireless IDS/IPS", "Wireless IDS/IPS (Template)", "shield"],
+ "sim": ["SIM", "SIM (Template)"],
+ "site": ["Batch OpenAPI", "Cluster", "Customer", "Data Export", "MSP Batch OpenAPI", "MSP Site", "Msp Osw Port Layout", "Osw Port Layout", "Quick Action", "Site", "Site Configuration", "Site Template", "Site Template Configuration"],
+ "stack": ["OLT", "OLT DBA", "OLT Gem Mapping", "OLT Gem Port", "OLT Line Profile", "OLT ONT Port", "OLT ONU Management", "OLT ONU Register", "OLT Pon Port", "OLT Service Port", "OLT Service Port Profile", "OLT Service Profile", "OLT T-cont", "OLT Traffic Profile", "Stack"],
+ "switch": ["Mlag", "OUI Based VLAN", "OUI Based VLAN (Template)", "Switch", "Switch (Template)", "Switch QoS"],
+ "topology": ["Topology"],
+ "user": ["APP Controller Settings", "Authentication", "Authentication (Template)", "Cloud User", "Controller Settings", "Form Auth Data", "License", "Local User", "SSO", "System Settings", "User and Role", "app", "uisetting"],
+ "voip": ["Bluetooth", "Bluetooth(Template)", "VoIP", "VoIP (Template)"],
+ "vpn": ["SSL VPN", "VPN", "Wireguard VPN"],
+ "wireless": ["Profiles", "Profiles (Template)", "Wireless Network", "Wireless Network (Template)"]
+}
