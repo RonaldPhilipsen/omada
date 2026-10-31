@@ -46,10 +46,10 @@
 - Consumes: none internal (stdlib only).
 - Produces: package `models` with all model types, enums, `maputil` helpers, `RequestError`/`ValidationError`/sentinels, `Version`, `VlanCreate`/`VlanUpdate`/validation.
 
-- [ ] **Step 1: `git mv` models + shared files into `controller/models/`, fix package clauses to `models`, add imports to `controller/*.go`** (root controller still references model types).
-- [ ] **Step 2: `git mv` the corresponding `*_test.go` files; update package clauses to `models`.**
-- [ ] **Step 3: Run gate** → `gofmt -l .; go vet ./...; go test ./controller/models/ -count=1` → green.
-- [ ] **Step 4: Commit** → `git add controller/models && git commit -m "refactor(controller): extract models package"`.
+- [x] **Step 1: `git mv` models + shared files into `controller/models/`, fix package clauses to `models`, add imports to `controller/*.go`** (root controller still references model types).
+- [x] **Step 2: `git mv` the corresponding `*_test.go` files; update package clauses to `models`.**
+- [x] **Step 3: Run gate** → `gofmt -l .; go vet ./...; go test ./controller/models/ -count=1` → green.
+- [x] **Step 4: Commit** → `git add controller/models && git commit -m "refactor(controller): extract models package"`.
 
 ### Task 2: Create `controller/conn` package
 
@@ -62,11 +62,11 @@
 - Consumes: none internal.
 - Produces: package `conn` with `Connection` interface, `conn` impl, exported `Login`/`RequestEndpoint`/`OpenapiRequest`/`SiteInfo`/`SiteVersion`/`DoMultipart`, `New(...) (Connection, error)`.
 
-- [ ] **Step 1: `git mv` connection.go + cookiejar.go + pagination.go into `controller/conn/`, package clause `conn`, export conn methods + `New` constructor returning `Connection`.**
-- [ ] **Step 2: Update `controller/controller.go`** — `c conn.Connection`, `conn.New(...)`, interface method calls (capitalized).
-- [ ] **Step 3: Adjust `connection_auth_test.go`** (package `controller`) to use exported conn API, or move conn-reaching parts into `controller/conn/conn_test.go`.
-- [ ] **Step 4: Run gate** → green.
-- [ ] **Step 5: Commit** → `git add controller/conn controller/controller.go && git commit -m "refactor(controller): extract conn package"`.
+- [x] **Step 1: `git mv` connection.go + cookiejar.go + pagination.go into `controller/conn/`, package clause `conn`, export conn methods + `New` constructor returning `Connection`.**
+- [x] **Step 2: Update `controller/controller.go`** — `c conn.Connection`, `conn.New(...)`, interface method calls (capitalized).
+- [x] **Step 3: Adjust `connection_auth_test.go`** (package `controller`) to use exported conn API, or move conn-reaching parts into `controller/conn/conn_test.go`.
+- [x] **Step 4: Run gate** → green.
+- [x] **Step 5: Commit** → `git add controller/conn controller/controller.go && git commit -m "refactor(controller): extract conn package"`.
 
 ### Task 3: Create `controller/site` package + testutils
 
@@ -80,19 +80,19 @@
 - Consumes: `conn.Connection`, `models.*`.
 - Produces: package `site` with `SiteClient`, `NewSiteClient`, all site-scoped methods.
 
-- [ ] **Step 1: `git mv` site_*.go + site_*_test.go into `controller/site/`, package clause `site`, add `conn`+`models` imports.**
-- [ ] **Step 2: Create `controller/internal/testutil/testutil.go` with exported helpers + site-1 mock.**
-- [ ] **Step 3: Rewrite site test construction** `&SiteClient{c: cl.c, site: "site-1"}` → `cl.SiteClient(context.Background(), "site-1")` (handle err).
-- [ ] **Step 4: Update `controller/controller.go` `SiteClient()`** → `site.NewSiteClient(cl.c, siteID)`.
-- [ ] **Step 5: Run gate** → green.
-- [ ] **Step 6: Commit** → `git add controller/site controller/internal controller/controller.go && git commit -m "refactor(controller): extract site package"`.
+- [x] **Step 1: `git mv` site_*.go + site_*_test.go into `controller/site/`, package clause `site`, add `conn`+`models` imports.**
+- [x] **Step 2: Create `controller/internal/testutil/testutil.go` with exported helpers + site-1 mock.**
+- [x] **Step 3: Rewrite site test construction** `&SiteClient{c: cl.c, site: "site-1"}` → `cl.SiteClient(context.Background(), "site-1")` (handle err).
+- [x] **Step 4: Update `controller/controller.go` `SiteClient()`** → `site.NewSiteClient(cl.c, siteID)`.
+- [x] **Step 5: Run gate** → green.
+- [x] **Step 6: Commit** → `git add controller/site controller/internal controller/controller.go && git commit -m "refactor(controller): extract site package"`.
 
 ### Task 4: Full gate + finalize
 
-- [ ] **Step 1: `gofmt -l .`** (empty), `go vet ./...` (clean), `go test ./... -race -count=1` (green). Fix anything.
-- [ ] **Step 2: Confirm root `controller` public API still imports/compiles** (`go build ./...`).
-- [ ] **Step 3: Commit** → `git commit -m "refactor(controller): finalize package split, gate green"`.
-- [ ] **Step 4: Done** → working tree clean except untracked `mise.toml`; `git log` shows one commit per task.
+- [x] **Step 1: `gofmt -l .`** (empty), `go vet ./...` (clean), `go test ./... -race -count=1` (green). Fix anything.
+- [x] **Step 2: Confirm root `controller` public API still imports/compiles** (`go build ./...`).
+- [x] **Step 3: Commit** → `git commit -m "refactor(controller): finalize package split, gate green"`.
+- [x] **Step 4: Done** → working tree clean except untracked `mise.toml`; `git log` shows one commit per task.
 
 ## Self-Review
 
