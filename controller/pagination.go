@@ -132,7 +132,7 @@ func (c *conn) pagesOpenAPIGet(ctx context.Context, api, endpoint, site string, 
 		uv := url.Values(query)
 		uv.Set("page", strconv.Itoa(page))
 		uv.Set("pageSize", strconv.Itoa(pageSize))
-		res, err := c.requestEndpoint(ctx, "GET", api, endpoint, site, uv, nil)
+		res, err := c.openapiRequest(ctx, "GET", api, endpoint, site, uv, nil)
 		if err != nil {
 			return pageOutcome{}, err
 		}
