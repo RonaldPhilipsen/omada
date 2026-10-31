@@ -251,3 +251,73 @@ func TestPortConfigVersionGate(t *testing.T) {
 		t.Fatalf("SetSwitchPortSettings() error = %v", err)
 	}
 }
+
+func TestGetSwitchPort(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/ports/3" {
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+				"id":                    "3",
+				"port":                  3,
+				"poe":                   1,
+				"profileOverrideEnable": true,
+				"profileName":           "Default",
+				"dot1x":                 0,
+				"lldpMedEnable":         true,
+				"spanningTreeEnable":    false,
+				"loopbackDetectEnable":  true,
+				"portIsolationEnable":   false,
+				"eeeEnable":             false,
+				"flowControlEnable":     false,
+			}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	port, err := sc.GetSwitchPort(context.Background(), "AA:BB:CC:DD:EE:03", 3)
+	if err != nil {
+		t.Fatalf("GetSwitchPort() error = %v", err)
+	}
+	if port.PortID() != "3" {
+		t.Errorf("GetSwitchPort() PortID = %q, want 3", port.PortID())
+	}
+	if port.PoEMode() != PoEModeEnabled {
+		t.Errorf("GetSwitchPort() PoEMode = %v, want enabled", port.PoEMode())
+	}
+	if !port.HasProfileOverride() {
+		t.Errorf("GetSwitchPort() HasProfileOverride = false, want true")
+	}
+}
+
+func TestGetSwitchPortEmptyID(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	if _, err := sc.GetSwitchPort(context.Background(), "", 3); err == nil {
+		t.Fatal("GetSwitchPort() expected error for empty device ID")
+	} else {
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("GetSwitchPort() error = %v, want *ValidationError", err)
+		}
+	}
+}
+
+func TestGetSwitchPortMiss(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/ports/3" {
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	sc := &SiteClient{c: cl.c, site: "site-1"}
+	if _, err := sc.GetSwitchPort(context.Background(), "AA:BB:CC:DD:EE:03", 3); err == nil {
+		t.Fatal("GetSwitchPort() expected error for missing port")
+	} else {
+		if !errors.Is(err, ErrInvalidDevice) {
+			t.Fatalf("GetSwitchPort() error = %v, want wrapped %v", err, ErrInvalidDevice)
+		}
+	}
+}

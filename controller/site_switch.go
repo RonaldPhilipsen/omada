@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -94,6 +95,21 @@ func (s *SiteClient) SwitchPorts(ctx context.Context, deviceID string) ([]Switch
 		}
 	}
 	return settings, nil
+}
+
+// GetSwitchPort returns the details of a single switch port.
+func (s *SiteClient) GetSwitchPort(ctx context.Context, deviceID string, portIndex int) (PortDetails, error) {
+	if deviceID == "" {
+		return PortDetails{}, &ValidationError{Msg: "device ID must not be empty"}
+	}
+	m, err := s.c.requestEndpoint(ctx, "GET", "v2", "switches/"+deviceID+"/ports/"+strconv.Itoa(portIndex), s.site, nil, nil)
+	if err != nil {
+		return PortDetails{}, err
+	}
+	if len(m) == 0 {
+		return PortDetails{}, fmt.Errorf("%w: port %d not found", ErrInvalidDevice, portIndex)
+	}
+	return NewPortDetails(m), nil
 }
 
 // SetSwitchPortSettings changes the configuration of a switch port, merging
