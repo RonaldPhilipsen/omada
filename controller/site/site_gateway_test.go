@@ -1,21 +1,22 @@
-package controller
+package site_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
 
 func TestGateways(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways" {
 			if got := r.URL.Query().Get("deviceType"); got != "gateway" {
 				t.Errorf("deviceType = %q, want gateway", got)
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"mac": "AA:BB:CC:DD:EE:01", "name": "Main models.Gateway", "type": "gateway", "status": 14, "statusCategory": 1, "ip": "192.168.1.1"},
 				},
@@ -26,7 +27,7 @@ func TestGateways(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	gateways, err := sc.Gateways(context.Background())
 	if err != nil {
 		t.Fatalf("Gateways() error = %v", err)
@@ -40,10 +41,10 @@ func TestGateways(t *testing.T) {
 }
 
 func TestGatewayEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.Gateway(context.Background(), ""); err == nil {
 		t.Fatal("models.Gateway() expected error for empty device ID")
 	} else {
@@ -55,9 +56,9 @@ func TestGatewayEmptyID(t *testing.T) {
 }
 
 func TestGatewayPorts(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"port": 1, "type": 0, "poe": 1, "speed": "1G"},
 				},
@@ -68,7 +69,7 @@ func TestGatewayPorts(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	ports, err := sc.GatewayPorts(context.Background(), "AA:BB:CC:DD:EE:01")
 	if err != nil {
 		t.Fatalf("GatewayPorts() error = %v", err)
@@ -92,29 +93,29 @@ func TestGatewayPorts(t *testing.T) {
 
 func TestSetGatewayPortSettingsMerge(t *testing.T) {
 	var patched map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"port": 1, "type": 0, "poe": 1, "speed": "1G"},
 				},
 				"currentSize": 1,
 				"totalRows":   1,
 			}})
-		case r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig":
+		case r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
 			patched = body
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.SetGatewayPortSettings(context.Background(), "AA:BB:CC:DD:EE:01", 1, models.PoEModeEnabled, "2G", nil); err != nil {
 		t.Fatalf("SetGatewayPortSettings() error = %v", err)
 	}
@@ -128,18 +129,18 @@ func TestSetGatewayPortSettingsMerge(t *testing.T) {
 
 func TestSetGatewayPoE(t *testing.T) {
 	var body map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/portConfig" {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.SetGatewayPoE(context.Background(), "AA:BB:CC:DD:EE:01", 1, models.PoEModeEnabled); err != nil {
 		t.Fatalf("SetGatewayPoE() error = %v", err)
 	}
@@ -149,9 +150,9 @@ func TestSetGatewayPoE(t *testing.T) {
 }
 
 func TestGetGatewayPort(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "AA:BB:CC:DD:EE:01",
 				"portConfigs": []map[string]any{
 					{"port": 1, "name": "WAN", "type": 1},
@@ -162,7 +163,7 @@ func TestGetGatewayPort(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	cfg, err := sc.GetGatewayPort(context.Background(), "AA:BB:CC:DD:EE:01", 1)
 	if err != nil {
 		t.Fatalf("GetGatewayPort() error = %v", err)
@@ -173,10 +174,10 @@ func TestGetGatewayPort(t *testing.T) {
 }
 
 func TestGetGatewayPortEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.GetGatewayPort(context.Background(), "", 1); err == nil {
 		t.Fatal("GetGatewayPort() expected error for empty device ID")
 	} else {
@@ -188,9 +189,9 @@ func TestGetGatewayPortEmptyID(t *testing.T) {
 }
 
 func TestGetGatewayPortMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "AA:BB:CC:DD:EE:01",
 				"portConfigs": []map[string]any{
 					{"port": 1, "name": "WAN", "type": 1},
@@ -200,7 +201,7 @@ func TestGetGatewayPortMiss(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.GetGatewayPort(context.Background(), "AA:BB:CC:DD:EE:01", 9); err == nil {
 		t.Fatal("GetGatewayPort() expected error for missing port")
 	} else {
@@ -213,13 +214,13 @@ func TestGetGatewayPortMiss(t *testing.T) {
 
 func TestSetGatewayWanPortConnectState(t *testing.T) {
 	var body map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/internetState" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/internetState" {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"port":          1,
 				"internetState": 1,
 			}})
@@ -227,7 +228,7 @@ func TestSetGatewayWanPortConnectState(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	status, err := sc.SetGatewayWanPortConnectState(context.Background(), "AA:BB:CC:DD:EE:01", 1, true)
 	if err != nil {
 		t.Fatalf("SetGatewayWanPortConnectState() error = %v", err)
@@ -239,13 +240,13 @@ func TestSetGatewayWanPortConnectState(t *testing.T) {
 		t.Errorf("SetGatewayWanPortConnectState() WANConnected = false, want true")
 	}
 
-	cl2 := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/internetState" {
+	cl2 := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/gateways/AA:BB:CC:DD:EE:01/internetState" {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"port":          1,
 				"internetState": 0,
 			}})
@@ -253,7 +254,7 @@ func TestSetGatewayWanPortConnectState(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc2 := &SiteClient{c: cl2.c, site: "site-1"}
+	sc2 := mustSiteClient(t, cl2)
 	status2, err := sc2.SetGatewayWanPortConnectState(context.Background(), "AA:BB:CC:DD:EE:01", 1, false)
 	if err != nil {
 		t.Fatalf("SetGatewayWanPortConnectState() error = %v", err)
@@ -267,10 +268,10 @@ func TestSetGatewayWanPortConnectState(t *testing.T) {
 }
 
 func TestSetGatewayWanPortConnectStateEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.SetGatewayWanPortConnectState(context.Background(), "", 1, true); err == nil {
 		t.Fatal("SetGatewayWanPortConnectState() expected error for empty device ID")
 	} else {

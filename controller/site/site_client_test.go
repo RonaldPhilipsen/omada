@@ -1,22 +1,23 @@
-package controller
+package site_test
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
 
 func TestSiteVersion(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": "6.2.0.0", "omadacId": testControllerID})
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": "6.2.0.0", "omadacId": testutil.TestControllerID})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	version, err := sc.SiteVersion(context.Background())
 	if err != nil {
 		t.Fatalf("SiteVersion() error = %v", err)
@@ -27,9 +28,9 @@ func TestSiteVersion(t *testing.T) {
 }
 
 func TestClientsAllPages(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/clients" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/clients" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"mac": "AA:BB:CC:DD:EE:01", "name": "Laptop", "wireless": true, "connectType": 2}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -38,7 +39,7 @@ func TestClientsAllPages(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	clients, err := sc.Clients(context.Background())
 	if err != nil {
 		t.Fatalf("Clients() error = %v", err)
@@ -52,17 +53,17 @@ func TestClientsAllPages(t *testing.T) {
 }
 
 func TestClientByMAC(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/clients/AA:BB:CC:DD:EE:01":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"mac": "AA:BB:CC:DD:EE:01", "name": "Laptop", "wireless": true}})
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/clients/unknown":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/clients/AA:BB:CC:DD:EE:01":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"mac": "AA:BB:CC:DD:EE:01", "name": "Laptop", "wireless": true}})
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/clients/unknown":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	client, err := sc.Client(context.Background(), "AA:BB:CC:DD:EE:01")
 	if err != nil {
 		t.Fatalf("models.Client() error = %v", err)
@@ -80,19 +81,19 @@ func TestClientByMAC(t *testing.T) {
 
 func TestBlockUnblockClient(t *testing.T) {
 	var blocked, unblocked []string
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/cmd/clients/AA:BB:CC:DD:EE:01/block":
+		case r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/cmd/clients/AA:BB:CC:DD:EE:01/block":
 			blocked = append(blocked, r.URL.Path)
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/cmd/clients/AA:BB:CC:DD:EE:01/unblock":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/cmd/clients/AA:BB:CC:DD:EE:01/unblock":
 			unblocked = append(unblocked, r.URL.Path)
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.BlockClient(context.Background(), "AA:BB:CC:DD:EE:01"); err != nil {
 		t.Fatalf("BlockClient() error = %v", err)
 	}
@@ -105,14 +106,14 @@ func TestBlockUnblockClient(t *testing.T) {
 }
 
 func TestReconnectClient(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/cmd/clients/AA:BB:CC:DD:EE:01/reconnect" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/cmd/clients/AA:BB:CC:DD:EE:01/reconnect" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.ReconnectClient(context.Background(), "AA:BB:CC:DD:EE:01"); err != nil {
 		t.Fatalf("ReconnectClient() error = %v", err)
 	}
@@ -120,20 +121,20 @@ func TestReconnectClient(t *testing.T) {
 
 func TestUpdateClientSettings(t *testing.T) {
 	var patchBodies []map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/clients/AA:BB:CC:DD:EE:01" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/clients/AA:BB:CC:DD:EE:01" {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode patch body: %v", err)
 				return
 			}
 			patchBodies = append(patchBodies, body)
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"mac": "AA:BB:CC:DD:EE:01", "name": "New"}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"mac": "AA:BB:CC:DD:EE:01", "name": "New"}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 
 	if err := sc.UpdateClientSettings(context.Background(), "AA:BB:CC:DD:EE:01", "New Name", nil, nil); err != nil {
 		t.Fatalf("UpdateClientSettings() error = %v", err)
@@ -170,11 +171,11 @@ func TestUpdateClientSettings(t *testing.T) {
 }
 
 func TestConnectedClientsVersionGate(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": "6.2.0.0", "omadacId": testControllerID})
-		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/clients":
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": "6.2.0.0", "omadacId": testutil.TestControllerID})
+		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/clients":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode openapi body: %v", err)
@@ -186,7 +187,7 @@ func TestConnectedClientsVersionGate(t *testing.T) {
 			if scope, ok := body["scope"].(float64); !ok || scope != 1 {
 				t.Errorf("openapi scope = %v, want 1", body["scope"])
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"mac": "AA:BB:CC:DD:EE:01", "name": "Laptop", "active": true}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -195,7 +196,7 @@ func TestConnectedClientsVersionGate(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	clients, err := sc.ConnectedClients(context.Background())
 	if err != nil {
 		t.Fatalf("ConnectedClients() error = %v", err)
@@ -206,12 +207,12 @@ func TestConnectedClientsVersionGate(t *testing.T) {
 }
 
 func TestConnectedClientsLegacyFilter(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": "6.1.0.5", "omadacId": testControllerID})
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/clients":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": "6.1.0.5", "omadacId": testutil.TestControllerID})
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/clients":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"mac": "AA:BB:CC:DD:EE:01", "name": "Laptop", "active": true},
 					{"mac": "AA:BB:CC:DD:EE:02", "name": "Phone", "active": false},
@@ -223,7 +224,7 @@ func TestConnectedClientsLegacyFilter(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	clients, err := sc.ConnectedClients(context.Background())
 	if err != nil {
 		t.Fatalf("ConnectedClients() error = %v", err)
@@ -237,9 +238,9 @@ func TestConnectedClientsLegacyFilter(t *testing.T) {
 }
 
 func TestKnownClients(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/insight/clients" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/insight/clients" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"mac": "AA:BB:CC:DD:EE:09", "name": "Guest"}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -248,7 +249,7 @@ func TestKnownClients(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	clients, err := sc.KnownClients(context.Background())
 	if err != nil {
 		t.Fatalf("KnownClients() error = %v", err)
@@ -263,8 +264,8 @@ func TestKnownClients(t *testing.T) {
 
 func TestNetworks(t *testing.T) {
 	var bodies []map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/lan-networks" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/lan-networks" {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
@@ -274,7 +275,7 @@ func TestNetworks(t *testing.T) {
 			if body["type"] != "lan" {
 				t.Errorf("body type = %v, want lan", body["type"])
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"id": "net-1", "name": "Guest", "purpose": "vlan", "vlan": 10, "gatewaySubnet": "192.168.10.1/24"}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -283,7 +284,7 @@ func TestNetworks(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	networks, err := sc.Networks(context.Background())
 	if err != nil {
 		t.Fatalf("Networks() error = %v", err)
@@ -303,9 +304,9 @@ func TestNetworks(t *testing.T) {
 }
 
 func TestVLANs(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/lan-networks" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/lan-networks" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"id": "net-1", "name": "Guest", "purpose": "vlan", "vlan": 10},
 					{"id": "net-2", "name": "LAN", "purpose": "lan"},
@@ -317,7 +318,7 @@ func TestVLANs(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	vlans, err := sc.VLANs(context.Background())
 	if err != nil {
 		t.Fatalf("VLANs() error = %v", err)
@@ -329,8 +330,8 @@ func TestVLANs(t *testing.T) {
 
 func TestCreateVLAN(t *testing.T) {
 	var created map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/"+testControllerID+"/sites/site-1/lan-networks" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/lan-networks" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -341,18 +342,18 @@ func TestCreateVLAN(t *testing.T) {
 		}
 		if body["purpose"] == "vlan" {
 			created = body
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "net-1", "name": "Guest", "purpose": "vlan", "vlan": 10,
 			}})
 			return
 		}
-		writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 			"data":        []map[string]any{{"id": "net-1", "name": "LAN", "purpose": "lan", "vlan": 1}},
 			"currentSize": 1,
 			"totalRows":   1,
 		}})
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 
 	n, err := sc.CreateVLAN(context.Background(), "Guest", 10)
 	if err != nil {
@@ -380,9 +381,9 @@ func TestCreateVLAN(t *testing.T) {
 }
 
 func TestCreateVLANConflict(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/lan-networks" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/lan-networks" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"id": "net-1", "name": "Guest", "purpose": "vlan", "vlan": 10}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -391,7 +392,7 @@ func TestCreateVLANConflict(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.CreateVLAN(context.Background(), "Other", 10); err == nil {
 		t.Fatal("CreateVLAN() expected conflict error for existing VLAN ID")
 	}
@@ -399,22 +400,22 @@ func TestCreateVLANConflict(t *testing.T) {
 
 func TestUpdateVLAN(t *testing.T) {
 	var patched map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPatch && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/lan-networks/net-1" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/lan-networks/net-1" {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
 			patched = body
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "net-1", "name": "Renamed", "purpose": "vlan", "vlan": 20,
 			}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 
 	name := "Renamed"
 	vlanID := 20

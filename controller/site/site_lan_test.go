@@ -1,22 +1,24 @@
-package controller
+package site_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
+	"github.com/RonaldPhilipsen/omada/controller/site"
 	"net/http"
 	"strings"
 	"testing"
 )
 
 func TestLanNetworks(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/lanNetworks" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/lanNetworks" {
 			if got := r.URL.Query().Get("type"); got != "lan" {
 				t.Errorf("type = %q, want lan", got)
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"id": "net-1", "name": "Guest", "purpose": "vlan", "vlan": 10},
 				},
@@ -27,7 +29,7 @@ func TestLanNetworks(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	networks, err := sc.LanNetworks(context.Background())
 	if err != nil {
 		t.Fatalf("LanNetworks() error = %v", err)
@@ -41,10 +43,10 @@ func TestLanNetworks(t *testing.T) {
 }
 
 func TestLanNetworkEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.LanNetwork(context.Background(), ""); err == nil {
 		t.Fatal("models.LanNetwork() expected error for empty network ID")
 	} else {
@@ -56,23 +58,23 @@ func TestLanNetworkEmptyID(t *testing.T) {
 }
 
 func TestCreateLanNetworkValidation(t *testing.T) {
-	if _, err := NewLanNetworkCreate("", 5); err == nil {
-		t.Fatal("NewLanNetworkCreate() expected error for empty name")
+	if _, err := site.NewLanNetworkCreate("", 5); err == nil {
+		t.Fatal("site.NewLanNetworkCreate() expected error for empty name")
 	}
-	if _, err := NewLanNetworkCreate("Guest", 0); err == nil {
-		t.Fatal("NewLanNetworkCreate() expected error for VLAN 0")
+	if _, err := site.NewLanNetworkCreate("Guest", 0); err == nil {
+		t.Fatal("site.NewLanNetworkCreate() expected error for VLAN 0")
 	}
-	if _, err := NewLanNetworkCreate("Guest", 1); err == nil {
-		t.Fatal("NewLanNetworkCreate() expected error for protected VLAN 1")
+	if _, err := site.NewLanNetworkCreate("Guest", 1); err == nil {
+		t.Fatal("site.NewLanNetworkCreate() expected error for protected VLAN 1")
 	}
-	if _, err := NewLanNetworkCreate("Guest", 4090); err != nil {
-		t.Errorf("NewLanNetworkCreate() error = %v, want 4090 to be valid", err)
+	if _, err := site.NewLanNetworkCreate("Guest", 4090); err != nil {
+		t.Errorf("site.NewLanNetworkCreate() error = %v, want 4090 to be valid", err)
 	}
 }
 
 func TestCreateLanNetwork(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/lanNetworks" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/lanNetworks" {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
@@ -81,15 +83,15 @@ func TestCreateLanNetwork(t *testing.T) {
 			if body["name"] != "Guest" || body["vlan"] != float64(10) {
 				t.Errorf("create body = %v, want name Guest vlan 10", body)
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "net-1", "name": "Guest", "vlan": 10,
 			}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
-	n, err := sc.CreateLanNetwork(context.Background(), LanNetworkCreate{Name: "Guest", VLAN: 10})
+	sc := mustSiteClient(t, cl)
+	n, err := sc.CreateLanNetwork(context.Background(), site.LanNetworkCreate{Name: "Guest", VLAN: 10})
 	if err != nil {
 		t.Fatalf("CreateLanNetwork() error = %v", err)
 	}
@@ -100,24 +102,24 @@ func TestCreateLanNetwork(t *testing.T) {
 
 func TestUpdateLanNetworkPartial(t *testing.T) {
 	var patched map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/lanNetworks/net-1" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/lanNetworks/net-1" {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
 			patched = body
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "net-1", "name": "Guest", "vlan": 20,
 			}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	vlan := 20
-	if _, err := sc.UpdateLanNetwork(context.Background(), LanNetworkUpdate{NetworkID: "net-1", VLAN: &vlan}); err != nil {
+	if _, err := sc.UpdateLanNetwork(context.Background(), site.LanNetworkUpdate{NetworkID: "net-1", VLAN: &vlan}); err != nil {
 		t.Fatalf("UpdateLanNetwork() error = %v", err)
 	}
 	if patched == nil {
@@ -126,7 +128,7 @@ func TestUpdateLanNetworkPartial(t *testing.T) {
 	if patched["vlan"] != float64(20) {
 		t.Errorf("UpdateLanNetwork body = %v, want vlan 20", patched)
 	}
-	if _, err := sc.UpdateLanNetwork(context.Background(), LanNetworkUpdate{NetworkID: "net-1"}); err == nil {
+	if _, err := sc.UpdateLanNetwork(context.Background(), site.LanNetworkUpdate{NetworkID: "net-1"}); err == nil {
 		t.Fatal("UpdateLanNetwork() expected error for empty update")
 	}
 }
@@ -134,35 +136,35 @@ func TestUpdateLanNetworkPartial(t *testing.T) {
 func TestVlanCreatePreviewAndWrite(t *testing.T) {
 	var previewBodies []map[string]any
 	var createBodies []map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlan/preview":
+		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlan/preview":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode preview body: %v", err)
 				return
 			}
 			previewBodies = append(previewBodies, body)
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode create body: %v", err)
 				return
 			}
 			createBodies = append(createBodies, body)
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "net-1", "name": "Guest", "vlan": 10,
 			}})
-		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{{"vlan": 10}},
 			}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	create, err := models.NewVlanCreate("Guest", 10)
 	if err != nil {
 		t.Fatalf("models.NewVlanCreate() error = %v", err)
@@ -183,20 +185,20 @@ func TestVlanCreatePreviewAndWrite(t *testing.T) {
 
 func TestVlanWriteSuccessReadback(t *testing.T) {
 	var writes int
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans":
+		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans":
 			writes++
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{{"vlan": 10}},
 			}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	create, err := models.NewVlanCreate("Guest", 10)
 	if err != nil {
 		t.Fatalf("models.NewVlanCreate() error = %v", err)
@@ -211,18 +213,18 @@ func TestVlanWriteSuccessReadback(t *testing.T) {
 
 func TestVlanWriteReadbackFailure(t *testing.T) {
 	var writes int
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans":
+		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans":
 			writes++
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans":
 			w.WriteHeader(http.StatusNotFound)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	create, err := models.NewVlanCreate("Guest", 10)
 	if err != nil {
 		t.Fatalf("models.NewVlanCreate() error = %v", err)
@@ -241,9 +243,9 @@ func TestVlanWriteReadbackFailure(t *testing.T) {
 
 func TestVlanDelete(t *testing.T) {
 	var deletes int
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlan/preview":
+		case r.Method == http.MethodPost && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlan/preview":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode preview body: %v", err)
@@ -252,26 +254,26 @@ func TestVlanDelete(t *testing.T) {
 			if body["vlan"] != float64(10) {
 				t.Errorf("preview body vlan = %v, want 10", body["vlan"])
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodDelete && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans/10":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodDelete && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans/10":
 			deletes++
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vlans":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vlans":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{{"vlan": 10}},
 			}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
-	if _, err := sc.PreviewVlanDelete(context.Background(), VlanDelete{VLAN: 10}); err != nil {
+	sc := mustSiteClient(t, cl)
+	if _, err := sc.PreviewVlanDelete(context.Background(), site.VlanDelete{VLAN: 10}); err != nil {
 		t.Fatalf("PreviewVlanDelete() error = %v", err)
 	}
-	if _, err := sc.VlanDelete(context.Background(), VlanDelete{VLAN: 10}); err != nil {
+	if _, err := sc.VlanDelete(context.Background(), site.VlanDelete{VLAN: 10}); err != nil {
 		t.Fatalf("VlanDelete() error = %v", err)
 	}
 	if deletes != 1 {
-		t.Errorf("VlanDelete calls = %d, want 1", deletes)
+		t.Errorf("site.VlanDelete calls = %d, want 1", deletes)
 	}
 }

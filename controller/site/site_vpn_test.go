@@ -1,18 +1,19 @@
-package controller
+package site_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
 
 func TestVpnPoliciesAllPages(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vpn/client-to-site-vpn-servers" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vpn/client-to-site-vpn-servers" {
 			var data []map[string]any
 			if r.URL.Query().Get("page") == "2" {
 				for i := 0; i < 30; i++ {
@@ -25,7 +26,7 @@ func TestVpnPoliciesAllPages(t *testing.T) {
 					data = append(data, map[string]any{"id": id, "name": "Server " + id, "status": true})
 				}
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        data,
 				"currentSize": 100,
 				"totalRows":   130,
@@ -34,7 +35,7 @@ func TestVpnPoliciesAllPages(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	policies, err := sc.VpnPolicies(context.Background())
 	if err != nil {
 		t.Fatalf("VpnPolicies() error = %v", err)
@@ -45,21 +46,21 @@ func TestVpnPoliciesAllPages(t *testing.T) {
 }
 
 func TestVpnPoliciesSkipsUnavailableCategory(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vpn/client-to-site-vpn-servers" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vpn/client-to-site-vpn-servers" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"id": "vpn-server-1", "name": "HQ IPSec", "status": true}, {"id": "vpn-server-2", "name": "Branch", "status": true}},
 				"currentSize": 2,
 				"totalRows":   2,
 			}})
 			return
 		}
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vpn/client-to-site-vpn-clients" {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vpn/client-to-site-vpn-clients" {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/vpn/site-to-site-vpns" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/vpn/site-to-site-vpns" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"id": "vpn-site-1", "name": "Branch", "status": true}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -68,7 +69,7 @@ func TestVpnPoliciesSkipsUnavailableCategory(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	policies, err := sc.VpnPolicies(context.Background())
 	if err != nil {
 		t.Fatalf("VpnPolicies() error = %v", err)
@@ -79,9 +80,9 @@ func TestVpnPoliciesSkipsUnavailableCategory(t *testing.T) {
 }
 
 func TestVpnPolicyMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/client-to-site-vpn-servers" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/client-to-site-vpn-servers" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"id": "vpn-server-1", "name": "HQ IPSec", "status": true}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -90,7 +91,7 @@ func TestVpnPolicyMiss(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.VpnPolicy(context.Background(), "vpn-server-missing"); err == nil {
 		t.Fatal("models.VpnPolicy() expected error for unknown policy ID")
 	} else {
@@ -103,9 +104,9 @@ func TestVpnPolicyMiss(t *testing.T) {
 
 func TestSetVpnPolicyEnabled(t *testing.T) {
 	var patched map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodPatch && r.URL.Path == "/openapi/v1/"+testControllerID+"/sites/site-1/vpn/vpn-server-1/status":
+		case r.Method == http.MethodPatch && r.URL.Path == "/openapi/v1/"+testutil.TestControllerID+"/sites/site-1/vpn/vpn-server-1/status":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
@@ -115,11 +116,11 @@ func TestSetVpnPolicyEnabled(t *testing.T) {
 			if patched["status"] != true {
 				t.Errorf("patch body status = %v, want true", patched["status"])
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "vpn-server-1", "name": "HQ IPSec", "status": true,
 			}})
-		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/client-to-site-vpn-servers":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/client-to-site-vpn-servers":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"id": "vpn-server-1", "name": "HQ IPSec", "status": true}},
 				"currentSize": 1,
 				"totalRows":   1,
@@ -128,7 +129,7 @@ func TestSetVpnPolicyEnabled(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	policy, err := sc.SetVpnPolicyEnabled(context.Background(), "vpn-server-1", true)
 	if err != nil {
 		t.Fatalf("SetVpnPolicyEnabled() error = %v", err)

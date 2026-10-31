@@ -1,4 +1,4 @@
-package controller
+package site
 
 import (
 	"context"
@@ -12,6 +12,12 @@ import (
 type SiteClient struct {
 	c    conn.Connection
 	site string
+}
+
+// NewSiteClient builds a site-scoped handle on the given connection.
+// Callers are expected to validate the site ID first (Controller.SiteClient does).
+func NewSiteClient(c conn.Connection, site string) *SiteClient {
+	return &SiteClient{c: c, site: site}
 }
 
 // SiteVersion returns the Omada version reported for the site.

@@ -1,68 +1,32 @@
-package controller
+package controller_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"encoding/json"
+
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 )
-
-const (
-	testControllerID  = "abc"
-	testControllerVer = "6.2.10.18"
-)
-
-var loginCount int
-
-func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
-	t.Helper()
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		t.Errorf("encode response: %v", err)
-	}
-}
-
-func newTestClient(t *testing.T, handler http.HandlerFunc) *Controller {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/info":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": testControllerVer, "omadacId": testControllerID})
-		case r.URL.Path == "/"+testControllerID+"/api/v2/login":
-			if r.Method == http.MethodPost {
-				loginCount++
-			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"token": "csrf-token"}})
-		default:
-			handler(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	cl, err := New(srv.URL, "user", "pass")
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	return cl
-}
 
 func TestNewLogsInOnce(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	defer cl.Close()
-	if loginCount != 1 {
-		t.Errorf("login calls = %d, want 1", loginCount)
+	if testutil.LoginCount() != 1 {
+		t.Errorf("login calls = %d, want 1", testutil.LoginCount())
 	}
 }
 
 func TestClientControllerInfo(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/info" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": testControllerVer, "omadacId": testControllerID})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "controllerVer": testutil.TestControllerVer, "omadacId": testutil.TestControllerID})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -71,18 +35,18 @@ func TestClientControllerInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("models.ControllerInfo() error = %v", err)
 	}
-	if info.ID() != testControllerID {
-		t.Errorf("models.ControllerInfo().ID() = %q, want %q", info.ID(), testControllerID)
+	if info.ID() != testutil.TestControllerID {
+		t.Errorf("models.ControllerInfo().ID() = %q, want %q", info.ID(), testutil.TestControllerID)
 	}
-	if info.ControllerVersion() != testControllerVer {
-		t.Errorf("models.ControllerInfo().ControllerVersion() = %q, want %q", info.ControllerVersion(), testControllerVer)
+	if info.ControllerVersion() != testutil.TestControllerVer {
+		t.Errorf("models.ControllerInfo().ControllerVersion() = %q, want %q", info.ControllerVersion(), testutil.TestControllerVer)
 	}
 }
 
 func TestSites(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/"+testControllerID+"/api/v2/users/current" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/users/current" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"privilege": map[string]any{
 					"sites": []map[string]any{
 						{"name": "Office", "key": "site-1"},
@@ -110,9 +74,9 @@ func TestSites(t *testing.T) {
 }
 
 func TestSiteByNameMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/"+testControllerID+"/api/v2/users/current" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/users/current" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"privilege": map[string]any{
 					"sites": []map[string]any{
 						{"name": "Home", "key": "site-2"},
@@ -133,7 +97,7 @@ func TestSiteByNameMiss(t *testing.T) {
 }
 
 func TestSiteEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	_, err := cl.Site(context.Background(), "")
@@ -148,13 +112,13 @@ func TestSiteEmptyID(t *testing.T) {
 
 func TestRebootAndShutdown(t *testing.T) {
 	var paths []string
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.Method+" "+r.URL.Path)
 		switch {
-		case r.URL.Path == "/"+testControllerID+"/api/v2/cmd/reboot":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"rebootTime": 300}})
-		case r.URL.Path == "/"+testControllerID+"/api/v2/cmd/shutdown":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/cmd/reboot":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"rebootTime": 300}})
+		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/cmd/shutdown":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -169,29 +133,25 @@ func TestRebootAndShutdown(t *testing.T) {
 	for _, p := range paths {
 		found[p] = true
 	}
-	if !found["POST "+"/"+testControllerID+"/api/v2/cmd/reboot"] {
+	if !found["POST "+"/"+testutil.TestControllerID+"/api/v2/cmd/reboot"] {
 		t.Errorf("missing reboot call, got %v", paths)
 	}
-	if !found["POST "+"/"+testControllerID+"/api/v2/cmd/shutdown"] {
+	if !found["POST "+"/"+testutil.TestControllerID+"/api/v2/cmd/shutdown"] {
 		t.Errorf("missing shutdown call, got %v", paths)
 	}
 }
 
 func TestSiteClientValidatesSite(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"id": "site-1", "name": "Office"}})
+		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"id": "site-1", "name": "Office"}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc, err := cl.SiteClient(context.Background(), "site-1")
-	if err != nil {
+	if _, err := cl.SiteClient(context.Background(), "site-1"); err != nil {
 		t.Fatalf("SiteClient() error = %v", err)
-	}
-	if sc.site != "site-1" {
-		t.Errorf("SiteClient site = %q, want %q", sc.site, "site-1")
 	}
 	sc2, err := cl.SiteClient(context.Background(), "unknown")
 	if err == nil {
@@ -201,9 +161,9 @@ func TestSiteClientValidatesSite(t *testing.T) {
 
 func TestSetCertificate(t *testing.T) {
 	patched := false
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/"+testControllerID+"/api/v2/cmd/uploadCert":
+		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/cmd/uploadCert":
 			if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data") {
 				t.Errorf("upload content type = %q, want multipart/form-data", got)
 			}
@@ -217,8 +177,8 @@ func TestSetCertificate(t *testing.T) {
 			if got := r.FormValue("cert"); got != "cert-pem" {
 				t.Errorf("upload cert = %q, want %q", got, "cert-pem")
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"cerId": "cer-1", "cerName": "cert"}})
-		case r.URL.Path == "/"+testControllerID+"/api/v2/controller/setting":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"cerId": "cer-1", "cerName": "cert"}})
+		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/controller/setting":
 			patched = true
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -232,7 +192,7 @@ func TestSetCertificate(t *testing.T) {
 			if cert["cerType"] != "PFX" {
 				t.Errorf("patch certificate cerType = %v, want PFX", cert["cerType"])
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -247,13 +207,13 @@ func TestSetCertificate(t *testing.T) {
 
 func TestInstallControllerFirmware(t *testing.T) {
 	var body map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/cmd/upgradeFirmware" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/cmd/upgradeFirmware" {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -267,7 +227,7 @@ func TestInstallControllerFirmware(t *testing.T) {
 }
 
 func TestInstallControllerFirmwareEmptyVersion(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	if err := cl.InstallControllerFirmware(context.Background(), ""); err == nil {
@@ -281,9 +241,9 @@ func TestInstallControllerFirmwareEmptyVersion(t *testing.T) {
 }
 
 func TestGetControllerUpgradeStatus(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/maintenance/hardware/upgradeStatus" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/maintenance/hardware/upgradeStatus" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"upgradeStatus": 3,
 			}})
 			return

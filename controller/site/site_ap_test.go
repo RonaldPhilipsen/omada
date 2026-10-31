@@ -1,21 +1,22 @@
-package controller
+package site_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
 )
 
 func TestAccessPoints(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/accessPoints" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/accessPoints" {
 			if got := r.URL.Query().Get("deviceType"); got != "accessPoint" {
 				t.Errorf("deviceType = %q, want accessPoint", got)
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"mac": "AA:BB:CC:DD:EE:02", "name": "Office AP", "type": "ap", "status": 14, "statusCategory": 1, "wirelessLinked": true},
 				},
@@ -26,7 +27,7 @@ func TestAccessPoints(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	aps, err := sc.AccessPoints(context.Background())
 	if err != nil {
 		t.Fatalf("AccessPoints() error = %v", err)
@@ -40,10 +41,10 @@ func TestAccessPoints(t *testing.T) {
 }
 
 func TestAccessPointEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.AccessPoint(context.Background(), ""); err == nil {
 		t.Fatal("models.AccessPoint() expected error for empty device ID")
 	} else {
@@ -56,10 +57,10 @@ func TestAccessPointEmptyID(t *testing.T) {
 
 func TestAccessPointsByMAC(t *testing.T) {
 	var gotMac string
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/accessPoints" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/accessPoints" {
 			gotMac = r.URL.Query().Get("mac")
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"mac": "AA:BB:CC:DD:EE:02", "name": "Office AP", "type": "ap"},
 				},
@@ -70,7 +71,7 @@ func TestAccessPointsByMAC(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	aps, err := sc.AccessPointsByMAC(context.Background(), []string{"AA:BB:CC:DD:EE:02", "AA:BB:CC:DD:EE:04"})
 	if err != nil {
 		t.Fatalf("AccessPointsByMAC() error = %v", err)
@@ -87,9 +88,9 @@ func TestAccessPointsByMAC(t *testing.T) {
 }
 
 func TestApPorts(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/portConfig" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/portConfig" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"lanPort": "LAN1", "supportVlan": true, "localVlanEnable": true, "localVlanId": 10, "supportPoe": false, "poeOutEnable": false},
 				},
@@ -100,7 +101,7 @@ func TestApPorts(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	ports, err := sc.ApPorts(context.Background(), "AA:BB:CC:DD:EE:02")
 	if err != nil {
 		t.Fatalf("ApPorts() error = %v", err)
@@ -115,18 +116,18 @@ func TestApPorts(t *testing.T) {
 
 func TestSetApPortEnabled(t *testing.T) {
 	var body map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPatch && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/portConfig" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/portConfig" {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.SetApPortEnabled(context.Background(), "AA:BB:CC:DD:EE:02", 1, true, false); err != nil {
 		t.Fatalf("SetApPortEnabled() error = %v", err)
 	}
@@ -142,16 +143,16 @@ func TestSetApPortEnabled(t *testing.T) {
 }
 
 func TestApRadioSettingsMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"type": "ap", "mac": "AA:BB:CC:DD:EE:02", "status": 14, "statusCategory": 1,
 			}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	_, err := sc.ApRadioSettings(context.Background(), "AA:BB:CC:DD:EE:02", 99)
 	if err == nil {
 		t.Fatal("ApRadioSettings() expected error for unknown radio")
@@ -164,27 +165,27 @@ func TestApRadioSettingsMiss(t *testing.T) {
 
 func TestSetApRadioEnabled(t *testing.T) {
 	var gotBody map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"type": "ap", "mac": "AA:BB:CC:DD:EE:02", "status": 14, "statusCategory": 1,
 				"radioSetting2g": map[string]any{
 					"radioEnable": true, "channelWidth": float64(models.ChannelWidthWidth80), "channel": float64(1),
 					"freq": float64(2412), "wirelessMode": float64(-2), "txPower": float64(20), "txPowerLevel": float64(2),
 				},
 			}})
-		case r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/radioConfig":
+		case r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/radioConfig":
 			if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.SetApRadioEnabled(context.Background(), "AA:BB:CC:DD:EE:02", 0, false); err != nil {
 		t.Fatalf("SetApRadioEnabled() error = %v", err)
 	}
@@ -196,27 +197,27 @@ func TestSetApRadioEnabled(t *testing.T) {
 
 func TestSetApRadioChannelMerges(t *testing.T) {
 	var gotBody map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"type": "ap", "mac": "AA:BB:CC:DD:EE:02", "status": 14, "statusCategory": 1,
 				"radioSetting2g": map[string]any{
 					"radioEnable": true, "channelWidth": float64(models.ChannelWidthWidth80), "channel": float64(1),
 					"freq": float64(2412), "wirelessMode": float64(-2), "txPower": float64(20), "txPowerLevel": float64(2),
 				},
 			}})
-		case r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/radioConfig":
+		case r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/radioConfig":
 			if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.SetApRadioChannel(context.Background(), "AA:BB:CC:DD:EE:02", 0, 6, models.ChannelWidthWidth40); err != nil {
 		t.Fatalf("SetApRadioChannel() error = %v", err)
 	}
@@ -235,9 +236,9 @@ func TestSetApRadioChannelMerges(t *testing.T) {
 }
 
 func TestApAvailableChannels(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/radioConfig/availableChannels" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/accessPoints/AA:BB:CC:DD:EE:02/radioConfig/availableChannels" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"channel": 1},
 					{"channel": 6},
@@ -249,7 +250,7 @@ func TestApAvailableChannels(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	channels, err := sc.ApAvailableChannels(context.Background(), "AA:BB:CC:DD:EE:02", 0)
 	if err != nil {
 		t.Fatalf("ApAvailableChannels() error = %v", err)

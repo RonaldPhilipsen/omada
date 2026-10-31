@@ -1,9 +1,10 @@
-package controller
+package site_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
 	"net/http"
 	"testing"
@@ -11,9 +12,9 @@ import (
 )
 
 func TestDevices(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/devices" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"mac": "AA:BB:CC:DD:EE:01", "name": "Main models.Gateway", "type": "gateway", "status": 14, "statusCategory": 1, "ip": "192.168.1.1"},
 					{"mac": "AA:BB:CC:DD:EE:03", "name": "Rack models.Switch", "type": "switch", "status": 14, "statusCategory": 1, "ip": "192.168.1.2"},
@@ -25,7 +26,7 @@ func TestDevices(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	devices, err := sc.Devices(context.Background())
 	if err != nil {
 		t.Fatalf("Devices() error = %v", err)
@@ -42,10 +43,10 @@ func TestDevices(t *testing.T) {
 }
 
 func TestDeviceEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.Device(context.Background(), ""); err == nil {
 		t.Fatal("models.Device() expected error for empty device ID")
 	} else {
@@ -57,14 +58,14 @@ func TestDeviceEmptyID(t *testing.T) {
 }
 
 func TestDeviceByMACMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/devices" && r.URL.Query().Get("mac") == "AA:BB:CC:DD:EE:99" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/devices" && r.URL.Query().Get("mac") == "AA:BB:CC:DD:EE:99" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	_, err := sc.DeviceByMAC(context.Background(), "AA:BB:CC:DD:EE:99")
 	if err == nil {
 		t.Fatal("DeviceByMAC() expected error for unknown MAC")
@@ -75,9 +76,9 @@ func TestDeviceByMACMiss(t *testing.T) {
 }
 
 func TestSiteTopology(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/topology" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/topology" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"topologyArray": []map[string]any{
 					{"type": "gateway", "mac": "AA:BB:CC:DD:EE:01", "name": "Main models.Gateway", "statusCategory": 1},
 				},
@@ -86,7 +87,7 @@ func TestSiteTopology(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	topo, err := sc.Topology(context.Background())
 	if err != nil {
 		t.Fatalf("models.Topology() error = %v", err)
@@ -101,14 +102,14 @@ func TestSiteTopology(t *testing.T) {
 }
 
 func TestTopologyNodeMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/topology/net-1" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/topology/net-1" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.TopologyNode(context.Background(), "net-1"); err == nil {
 		t.Fatal("models.TopologyNode() expected error for missing node")
 	} else {
@@ -121,18 +122,18 @@ func TestTopologyNodeMiss(t *testing.T) {
 
 func TestSetDeviceLED(t *testing.T) {
 	var body map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/led" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/led" {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.SetDeviceLED(context.Background(), "AA:BB:CC:DD:EE:01", models.LedSettingOn, 30*time.Second); err != nil {
 		t.Fatalf("SetDeviceLED() error = %v", err)
 	}
@@ -146,20 +147,20 @@ func TestSetDeviceLED(t *testing.T) {
 
 func TestRebootRestoreReset(t *testing.T) {
 	var paths []string
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.Method+" "+r.URL.Path)
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/reboot":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"rebootTime": 300}})
-		case r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/restore":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/factoryReset":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/reboot":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"rebootTime": 300}})
+		case r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/restore":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/factoryReset":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.RebootDevice(context.Background(), "AA:BB:CC:DD:EE:01"); err != nil {
 		t.Fatalf("RebootDevice() error = %v", err)
 	}
@@ -174,9 +175,9 @@ func TestRebootRestoreReset(t *testing.T) {
 		found[p] = true
 	}
 	for _, want := range []string{
-		"POST /" + testControllerID + "/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/reboot",
-		"POST /" + testControllerID + "/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/restore",
-		"POST /" + testControllerID + "/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/factoryReset",
+		"POST /" + testutil.TestControllerID + "/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/reboot",
+		"POST /" + testutil.TestControllerID + "/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/restore",
+		"POST /" + testutil.TestControllerID + "/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:01/cmd/factoryReset",
 	} {
 		if !found[want] {
 			t.Errorf("missing device command call %q, got %v", want, paths)
@@ -186,20 +187,20 @@ func TestRebootRestoreReset(t *testing.T) {
 
 func TestUpgradeFirmware(t *testing.T) {
 	var bodies []map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/cmd/upgrade" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/cmd/upgrade" {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
 			bodies = append(bodies, body)
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.UpgradeDeviceFirmware(context.Background(), []string{"AA:BB:CC:DD:EE:01"}); err != nil {
 		t.Fatalf("UpgradeDeviceFirmware() error = %v", err)
 	}
@@ -216,9 +217,9 @@ func TestUpgradeFirmware(t *testing.T) {
 }
 
 func TestGetFirmwareUpdates(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/upgrade" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/upgrade" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"deviceId": "AA:BB:CC:DD:EE:01", "curFwVer": "6.2.0.0", "lastFwVer": "6.2.1.0", "fwReleaseLog": "notes"},
 				},
@@ -229,7 +230,7 @@ func TestGetFirmwareUpdates(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	updates, err := sc.GetFirmwareUpdates(context.Background())
 	if err != nil {
 		t.Fatalf("GetFirmwareUpdates() error = %v", err)
@@ -247,19 +248,19 @@ func TestGetFirmwareUpdates(t *testing.T) {
 
 func TestUpdateFirmwareChannel(t *testing.T) {
 	var body map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/upgrade" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/upgrade" {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
-	if err := sc.UpdateFirmwareChannel(context.Background(), UpdateSectionHardware, "beta"); err != nil {
+	sc := mustSiteClient(t, cl)
+	if err := sc.UpdateFirmwareChannel(context.Background(), models.UpdateSectionHardware, "beta"); err != nil {
 		t.Fatalf("UpdateFirmwareChannel() error = %v", err)
 	}
 	if body["section"] != "hardware" {
@@ -271,9 +272,9 @@ func TestUpdateFirmwareChannel(t *testing.T) {
 }
 
 func TestGetFirmwareDetails(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:03/firmware" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:03/firmware" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"curFwVer":     "6.2.0.0",
 				"lastFwVer":    "6.2.1.0",
 				"fwReleaseLog": "Security fixes",
@@ -282,7 +283,7 @@ func TestGetFirmwareDetails(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	update, err := sc.GetFirmwareDetails(context.Background(), "AA:BB:CC:DD:EE:03")
 	if err != nil {
 		t.Fatalf("GetFirmwareDetails() error = %v", err)
@@ -299,10 +300,10 @@ func TestGetFirmwareDetails(t *testing.T) {
 }
 
 func TestGetFirmwareDetailsEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.GetFirmwareDetails(context.Background(), ""); err == nil {
 		t.Fatal("GetFirmwareDetails() expected error for empty device ID")
 	} else {
@@ -314,14 +315,14 @@ func TestGetFirmwareDetailsEmptyID(t *testing.T) {
 }
 
 func TestGetFirmwareDetailsMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:03/firmware" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/devices/AA:BB:CC:DD:EE:03/firmware" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.GetFirmwareDetails(context.Background(), "AA:BB:CC:DD:EE:03"); err == nil {
 		t.Fatal("GetFirmwareDetails() expected error for missing device")
 	} else {

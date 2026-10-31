@@ -9,6 +9,20 @@ import (
 
 	"github.com/RonaldPhilipsen/omada/controller/conn"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
+	"github.com/RonaldPhilipsen/omada/controller/site"
+)
+
+// SiteClient is the site-scoped API handle, defined in the site package.
+type SiteClient = site.SiteClient
+
+// UpdateSection is the firmware update section, defined in the models package.
+type UpdateSection = models.UpdateSection
+
+const (
+	// UpdateSectionHardware targets hardware (firmware) controller updates.
+	UpdateSectionHardware = models.UpdateSectionHardware
+	// UpdateSectionSoftware targets software controller updates.
+	UpdateSectionSoftware = models.UpdateSectionSoftware
 )
 
 // Controller is the controller-level API facade. Controller-scoped operations
@@ -163,11 +177,11 @@ func (cl *Controller) GetControllerUpgradeStatus(ctx context.Context) (*models.H
 }
 
 // SiteClient validates the site and returns a site-scoped client handle.
-func (cl *Controller) SiteClient(ctx context.Context, siteID string) (*SiteClient, error) {
+func (cl *Controller) SiteClient(ctx context.Context, siteID string) (*site.SiteClient, error) {
 	if _, err := cl.Site(ctx, siteID); err != nil {
 		return nil, err
 	}
-	return &SiteClient{c: cl.c, site: siteID}, nil
+	return site.NewSiteClient(cl.c, siteID), nil
 }
 
 // FirmwareUpdates checks for controller firmware updates.
@@ -224,13 +238,3 @@ func (cl *Controller) Close() error {
 	cl.c.CloseIdleConnections()
 	return nil
 }
-
-// UpdateSection identifies the hardware or software half of a firmware update.
-type UpdateSection string
-
-const (
-	// UpdateSectionHardware targets hardware (firmware) controller updates.
-	UpdateSectionHardware UpdateSection = "hardware"
-	// UpdateSectionSoftware targets software controller updates.
-	UpdateSectionSoftware UpdateSection = "software"
-)

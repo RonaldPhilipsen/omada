@@ -1,4 +1,4 @@
-package controller
+package site
 
 import (
 	"context"
@@ -141,7 +141,7 @@ func (s *SiteClient) GetFirmwareDetails(ctx context.Context, deviceID string) (m
 }
 
 // UpdateFirmwareChannel selects the firmware release channel to check.
-func (s *SiteClient) UpdateFirmwareChannel(ctx context.Context, section UpdateSection, channel string) error {
+func (s *SiteClient) UpdateFirmwareChannel(ctx context.Context, section models.UpdateSection, channel string) error {
 	body := map[string]any{
 		"section": string(section),
 		"channel": channel,

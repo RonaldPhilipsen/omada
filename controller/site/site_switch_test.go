@@ -1,21 +1,23 @@
-package controller
+package site_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
+	"github.com/RonaldPhilipsen/omada/controller/site"
 	"net/http"
 	"testing"
 )
 
 func TestSwitches(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches" {
 			if got := r.URL.Query().Get("deviceType"); got != "switch" {
 				t.Errorf("deviceType = %q, want switch", got)
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"mac": "AA:BB:CC:DD:EE:03", "name": "Rack models.Switch", "type": "switch", "status": 14, "statusCategory": 1},
 				},
@@ -26,7 +28,7 @@ func TestSwitches(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	switches, err := sc.Switches(context.Background())
 	if err != nil {
 		t.Fatalf("Switches() error = %v", err)
@@ -40,10 +42,10 @@ func TestSwitches(t *testing.T) {
 }
 
 func TestSwitchEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.Switch(context.Background(), ""); err == nil {
 		t.Fatal("models.Switch() expected error for empty device ID")
 	} else {
@@ -56,10 +58,10 @@ func TestSwitchEmptyID(t *testing.T) {
 
 func TestSwitchesByMAC(t *testing.T) {
 	var gotMac string
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testControllerID+"/sites/site-1/switches" {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi/v2/"+testutil.TestControllerID+"/sites/site-1/switches" {
 			gotMac = r.URL.Query().Get("mac")
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"mac": "AA:BB:CC:DD:EE:03", "name": "Rack models.Switch", "type": "switch"},
 				},
@@ -70,7 +72,7 @@ func TestSwitchesByMAC(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	switches, err := sc.SwitchesByMAC(context.Background(), []string{"AA:BB:CC:DD:EE:03", "AA:BB:CC:DD:EE:05"})
 	if err != nil {
 		t.Fatalf("SwitchesByMAC() error = %v", err)
@@ -87,9 +89,9 @@ func TestSwitchesByMAC(t *testing.T) {
 }
 
 func TestSwitchPorts(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"port": 1, "name": "Port 1", "type": 1, "pvid": 10},
 				},
@@ -100,7 +102,7 @@ func TestSwitchPorts(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	ports, err := sc.SwitchPorts(context.Background(), "AA:BB:CC:DD:EE:03")
 	if err != nil {
 		t.Fatalf("SwitchPorts() error = %v", err)
@@ -115,33 +117,33 @@ func TestSwitchPorts(t *testing.T) {
 
 func TestSetSwitchPortSettingsMerge(t *testing.T) {
 	var patched map[string]any
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "site-1", "name": "Office", "controllerVer": "6.2.10.18",
 			}})
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data": []map[string]any{
 					{"port": 1, "name": "Port 1", "type": 1, "pvid": 10},
 				},
 				"currentSize": 1,
 				"totalRows":   1,
 			}})
-		case r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
+		case r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
 			patched = body
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if err := sc.SetSwitchPortSettings(context.Background(), "AA:BB:CC:DD:EE:03", 1, models.PortTypeCopper, 20, []int{10}, nil, nil); err != nil {
 		t.Fatalf("SetSwitchPortSettings() error = %v", err)
 	}
@@ -154,9 +156,9 @@ func TestSetSwitchPortSettingsMerge(t *testing.T) {
 }
 
 func TestPortProfileCRUD(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/portProfiles":
+		case r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/portProfiles":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
@@ -165,14 +167,14 @@ func TestPortProfileCRUD(t *testing.T) {
 			if body["name"] == "" {
 				t.Errorf("create body name = %v, want non-empty", body["name"])
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "profile-1", "name": "Profile A", "site": "site-1",
 			}})
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/portProfiles/profile-1":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/portProfiles/profile-1":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "profile-1", "name": "Profile A", "site": "site-1",
 			}})
-		case r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/portProfiles/profile-1":
+		case r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/portProfiles/profile-1":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
@@ -181,30 +183,30 @@ func TestPortProfileCRUD(t *testing.T) {
 			if body["name"] == "" {
 				t.Errorf("update body name = %v, want non-empty", body["name"])
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "profile-1", "name": "Profile B", "site": "site-1",
 			}})
-		case r.Method == http.MethodDelete && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/portProfiles/profile-1":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/portProfiles/profile-1/cmd/apply":
+		case r.Method == http.MethodDelete && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/portProfiles/profile-1":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodPost && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/portProfiles/profile-1/cmd/apply":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
-	if _, err := sc.CreatePortProfile(context.Background(), PortProfileOverrides{Name: "Profile A", Ports: []int{1, 2}}); err != nil {
+	sc := mustSiteClient(t, cl)
+	if _, err := sc.CreatePortProfile(context.Background(), site.PortProfileOverrides{Name: "Profile A", Ports: []int{1, 2}}); err != nil {
 		t.Fatalf("CreatePortProfile() error = %v", err)
 	}
 	if _, err := sc.PortProfile(context.Background(), "profile-1"); err != nil {
 		t.Fatalf("models.PortProfile() error = %v", err)
 	}
-	if _, err := sc.UpdatePortProfile(context.Background(), "profile-1", PortProfileOverrides{Name: "Profile B"}); err != nil {
+	if _, err := sc.UpdatePortProfile(context.Background(), "profile-1", site.PortProfileOverrides{Name: "Profile B"}); err != nil {
 		t.Fatalf("UpdatePortProfile() error = %v", err)
 	}
 	if err := sc.DeletePortProfile(context.Background(), "profile-1"); err != nil {
@@ -216,31 +218,31 @@ func TestPortProfileCRUD(t *testing.T) {
 }
 
 func TestPortConfigVersionGate(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id": "site-1", "name": "Office", "controllerVer": "5.15.5.5",
 			}})
-		case r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+		case r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"data":        []map[string]any{{"port": 1, "name": "Port 1", "type": 1, "pvid": 10}},
 				"currentSize": 1, "totalRows": 1,
 			}})
-		case r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
+		case r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/portConfig":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Errorf("decode body: %v", err)
 				return
 			}
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
-		case r.Method == http.MethodPatch && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switch/AA:BB:CC:DD:EE:03/portConfig":
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+		case r.Method == http.MethodPatch && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switch/AA:BB:CC:DD:EE:03/portConfig":
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	version, err := sc.SiteVersion(context.Background())
 	if err != nil {
 		t.Fatalf("SiteVersion() error = %v", err)
@@ -254,9 +256,9 @@ func TestPortConfigVersionGate(t *testing.T) {
 }
 
 func TestGetSwitchPort(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/ports/3" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/ports/3" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
 				"id":                    "3",
 				"port":                  3,
 				"poe":                   1,
@@ -274,7 +276,7 @@ func TestGetSwitchPort(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	port, err := sc.GetSwitchPort(context.Background(), "AA:BB:CC:DD:EE:03", 3)
 	if err != nil {
 		t.Fatalf("GetSwitchPort() error = %v", err)
@@ -291,10 +293,10 @@ func TestGetSwitchPort(t *testing.T) {
 }
 
 func TestGetSwitchPortEmptyID(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.GetSwitchPort(context.Background(), "", 3); err == nil {
 		t.Fatal("GetSwitchPort() expected error for empty device ID")
 	} else {
@@ -306,14 +308,14 @@ func TestGetSwitchPortEmptyID(t *testing.T) {
 }
 
 func TestGetSwitchPortMiss(t *testing.T) {
-	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/ports/3" {
-			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1/switches/AA:BB:CC:DD:EE:03/ports/3" {
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	sc := &SiteClient{c: cl.c, site: "site-1"}
+	sc := mustSiteClient(t, cl)
 	if _, err := sc.GetSwitchPort(context.Background(), "AA:BB:CC:DD:EE:03", 3); err == nil {
 		t.Fatal("GetSwitchPort() expected error for missing port")
 	} else {

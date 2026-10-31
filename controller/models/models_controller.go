@@ -331,3 +331,13 @@ func strippedPtr(s string) *string {
 	}
 	return &s
 }
+
+// UpdateSection identifies the hardware or software half of a firmware update.
+type UpdateSection string
+
+const (
+	// UpdateSectionHardware targets hardware (firmware) controller updates.
+	UpdateSectionHardware UpdateSection = "hardware"
+	// UpdateSectionSoftware targets software controller updates.
+	UpdateSectionSoftware UpdateSection = "software"
+)
