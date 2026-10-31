@@ -152,6 +152,26 @@ func (cl *Controller) Shutdown(ctx context.Context) error {
 	return err
 }
 
+// InstallControllerFirmware installs controller firmware to the given target version.
+func (cl *Controller) InstallControllerFirmware(ctx context.Context, targetVersion string) error {
+	if targetVersion == "" {
+		return &ValidationError{Msg: "target version must not be empty"}
+	}
+	body := map[string]any{"targetVersion": targetVersion}
+	_, err := cl.c.requestEndpoint(ctx, "POST", "v2", "cmd/upgradeFirmware", "", nil, body)
+	return err
+}
+
+// GetControllerUpgradeStatus returns the status of an ongoing hardware controller firmware upgrade.
+func (cl *Controller) GetControllerUpgradeStatus(ctx context.Context) (*HardwareUpgradeStatus, error) {
+	m, err := cl.c.requestEndpoint(ctx, "GET", "v2", "maintenance/hardware/upgradeStatus", "", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	status := NewHardwareUpgradeStatus(m)
+	return &status, nil
+}
+
 // SiteClient validates the site and returns a site-scoped client handle.
 func (cl *Controller) SiteClient(ctx context.Context, siteID string) (*SiteClient, error) {
 	if _, err := cl.Site(ctx, siteID); err != nil {

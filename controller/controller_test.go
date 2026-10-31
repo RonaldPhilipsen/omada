@@ -243,3 +243,57 @@ func TestSetCertificate(t *testing.T) {
 		t.Error("controller/setting was not patched after upload")
 	}
 }
+
+func TestInstallControllerFirmware(t *testing.T) {
+	var body map[string]any
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/"+testControllerID+"/api/v2/cmd/upgradeFirmware" {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode body: %v", err)
+				return
+			}
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	if err := cl.InstallControllerFirmware(context.Background(), "6.4.0.1234"); err != nil {
+		t.Fatalf("InstallControllerFirmware() error = %v", err)
+	}
+	if body["targetVersion"] != "6.4.0.1234" {
+		t.Errorf("InstallControllerFirmware body targetVersion = %v, want 6.4.0.1234", body["targetVersion"])
+	}
+}
+
+func TestInstallControllerFirmwareEmptyVersion(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	if err := cl.InstallControllerFirmware(context.Background(), ""); err == nil {
+		t.Fatal("InstallControllerFirmware() expected error for empty target version")
+	} else {
+		var verr *ValidationError
+		if !errors.As(err, &verr) {
+			t.Fatalf("InstallControllerFirmware() error = %v, want *ValidationError", err)
+		}
+	}
+}
+
+func TestGetControllerUpgradeStatus(t *testing.T) {
+	cl := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/"+testControllerID+"/api/v2/maintenance/hardware/upgradeStatus" {
+			writeJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
+				"upgradeStatus": 3,
+			}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	status, err := cl.GetControllerUpgradeStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetControllerUpgradeStatus() error = %v", err)
+	}
+	if status.UpgradeStatus() != 3 {
+		t.Errorf("GetControllerUpgradeStatus() UpgradeStatus = %d, want 3", status.UpgradeStatus())
+	}
+}
