@@ -25,12 +25,6 @@ type Connection interface {
 	Login(ctx context.Context) (string, error)
 	// RequestEndpoint performs an authenticated v2 API request.
 	RequestEndpoint(ctx context.Context, method, api, endpoint, site string, query url.Values, body any) (map[string]any, error)
-	// OpenapiRequest performs an authenticated OpenAPI-versioned request.
-	OpenapiRequest(ctx context.Context, method, version, endpoint, site string, query url.Values, body any) (map[string]any, error)
-	// SiteInfo fetches a site's detail object.
-	SiteInfo(ctx context.Context, site string) (map[string]any, error)
-	// SiteVersion returns the site's reported version.
-	SiteVersion(ctx context.Context, site string) (models.Version, error)
 	// DoMultipart performs a multipart form-data request against an explicit URL.
 	DoMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, csrf string) (map[string]any, error)
 	// ControllerInfo fetches unauthenticated controller diagnostics.
@@ -45,14 +39,6 @@ type Connection interface {
 	CSRFToken() string
 	// CloseIdleConnections releases pooled idle connections.
 	CloseIdleConnections()
-	// PagesV2 collects all pages of a legacy v2 GET endpoint.
-	PagesV2(ctx context.Context, endpoint, site string, params url.Values) ([]map[string]any, error)
-	// PagesOpenAPIPost collects all pages of an OpenAPI POST endpoint.
-	PagesOpenAPIPost(ctx context.Context, api, endpoint, site string, body map[string]any) ([]map[string]any, error)
-	// PagesOpenAPI collects all pages of an OpenAPI versioned POST endpoint.
-	PagesOpenAPI(ctx context.Context, version, endpoint, site string, body map[string]any) ([]map[string]any, error)
-	// PagesOpenAPIGet collects all pages of an OpenAPI GET endpoint.
-	PagesOpenAPIGet(ctx context.Context, api, endpoint, site string, params url.Values) ([]map[string]any, error)
 }
 
 // conn is the Connection implementation: HTTP + auth state.
@@ -113,16 +99,6 @@ func (c *conn) url(endpoint, site string) string {
 		endpoint = "sites/" + site + "/" + endpoint
 	}
 	return c.base + "/" + id + "/api/v2/" + endpoint
-}
-
-func (c *conn) openapiURL(version, endpoint, site string) string {
-	c.authMu.Lock()
-	id := c.controllerID
-	c.authMu.Unlock()
-	if site != "" {
-		endpoint = "sites/" + site + "/" + endpoint
-	}
-	return c.base + "/openapi/" + version + "/" + id + "/" + endpoint
 }
 
 var minControllerVersion = models.ParseVersionMust("5.12.0")
@@ -255,50 +231,6 @@ func (c *conn) RequestEndpoint(ctx context.Context, method, api, endpoint, site 
 		return nil, loginErr
 	}
 	return c.do(ctx, method, u, query, body, csrf)
-}
-
-// OpenapiRequest performs an authenticated OpenAPI-versioned request, logging
-// in (and re-logging in once, on auth-class failures) as needed. The URL is
-// built under authMu after the login decision so a concurrent first request
-// can never race on an empty controllerID.
-func (c *conn) OpenapiRequest(ctx context.Context, method, version, endpoint, site string, query url.Values, body any) (map[string]any, error) {
-	c.authMu.Lock()
-	ok, err := c.checkLogin(ctx)
-	if err == nil && !ok {
-		_, err = c.login(ctx)
-	}
-	var u string
-	csrf := ""
-	if err == nil {
-		if site != "" {
-			endpoint = "sites/" + site + "/" + endpoint
-		}
-		u = c.base + "/openapi/" + version + "/" + c.controllerID + "/" + endpoint
-		csrf = c.csrf
-	}
-	c.authMu.Unlock()
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := c.do(ctx, method, u, query, body, csrf)
-	if err == nil {
-		return res, nil
-	}
-	if !errors.Is(err, models.ErrLoginFailed) && !errors.Is(err, models.ErrLoginSessionClosed) {
-		return nil, err
-	}
-	c.authMu.Lock()
-	_, loginErr := c.login(ctx)
-	var retryCSRF string
-	if loginErr == nil {
-		retryCSRF = c.csrf
-	}
-	c.authMu.Unlock()
-	if loginErr != nil {
-		return nil, loginErr
-	}
-	return c.do(ctx, method, u, query, body, retryCSRF)
 }
 
 // do performs a single HTTP request and unwraps the Omada response envelope.
@@ -445,23 +377,6 @@ func (c *conn) ControllerVersion(ctx context.Context) (models.Version, error) {
 		return models.ParseVersion(cached)
 	}
 	info, err := c.ControllerInfo(ctx)
-	if err != nil {
-		return models.Version{}, err
-	}
-	return models.ParseVersion(models.MapStr(info, "controllerVer"))
-}
-
-// SiteInfo fetches a site's detail object.
-func (c *conn) SiteInfo(ctx context.Context, site string) (map[string]any, error) {
-	c.authMu.Lock()
-	csrf, id := c.csrf, c.controllerID
-	c.authMu.Unlock()
-	return c.do(ctx, "GET", c.base+"/"+id+"/api/v2/sites/"+site, nil, nil, csrf)
-}
-
-// SiteVersion returns the site's reported version.
-func (c *conn) SiteVersion(ctx context.Context, site string) (models.Version, error) {
-	info, err := c.SiteInfo(ctx, site)
 	if err != nil {
 		return models.Version{}, err
 	}

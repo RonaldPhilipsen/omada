@@ -95,12 +95,6 @@ func TestConnURLs(t *testing.T) {
 	if got := c.url("clients", "s1"); got != "https://omada/abc/api/v2/sites/s1/clients" {
 		t.Errorf("url with site: %s", got)
 	}
-	if got := c.openapiURL("v2", "clients", "s1"); got != "https://omada/openapi/v2/abc/sites/s1/clients" {
-		t.Errorf("openapi: %s", got)
-	}
-	if got := c.openapiURL("v1", "setting/service/dhcp", "s1"); got != "https://omada/openapi/v1/abc/sites/s1/setting/service/dhcp" {
-		t.Errorf("openapi v1: %s", got)
-	}
 }
 
 func TestNewConnKeepsHTTPScheme(t *testing.T) {

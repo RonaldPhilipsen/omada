@@ -1,8 +1,0 @@
-{
-  "id": "net-lan-1",
-  "name": "Office LAN",
-  "purpose": "lan",
-  "vlan": 10,
-  "gatewaySubnet": "192.168.10.1/24",
-  "dhcpSettings": {"enable": true}
-}

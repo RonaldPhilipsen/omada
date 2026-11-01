@@ -22,7 +22,7 @@ func TestRequestErrorIs(t *testing.T) {
 	if !errors.Is(ErrLoginFailed, ErrLoginFailed) {
 		t.Error("sentinel must match itself")
 	}
-	if errors.Is(ErrSiteNotFound, ErrLoginFailed) {
+	if errors.Is(ErrConnectionFailed, ErrLoginFailed) {
 		t.Error("unrelated sentinels must not match")
 	}
 }

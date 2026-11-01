@@ -41,12 +41,8 @@ var (
 	// ErrUnsupportedControllerVersion is returned when the controller is older
 	// than the minimum supported version.
 	ErrUnsupportedControllerVersion = errors.New("unsupported Omada controller version")
-	// ErrSiteNotFound is returned when a referenced site does not exist.
-	ErrSiteNotFound = errors.New("site not found")
 	// ErrConnectionFailed wraps network-level failures reaching the controller.
 	ErrConnectionFailed = errors.New("connection to Omada controller failed")
 	// ErrBadControllerURL wraps failures resolving the controller URL.
 	ErrBadControllerURL = errors.New("controller URL could not be resolved")
-	// ErrInvalidDevice is returned when a device lookup yields no usable device.
-	ErrInvalidDevice = errors.New("invalid device")
 )
