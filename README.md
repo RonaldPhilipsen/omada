@@ -1,55 +1,69 @@
 # omada
 
-Go client for the TP-Link Omada SDN controller API. This package is a
-synchronous port of [`tplink-omada-client`](https://github.com/tplink-omada-client)
-v1.5.14 covering the controller scope.
+Go clients for the TP-Link Omada SDN controller. The module ships two
+clients: `controller/` for controller management and `cloud/` for site and
+device management (hosted Omada Cloud or on-prem controller).
 
-## What it is
+## Which client to use
 
-The client speaks the Omada controller REST API (`/openapi/...` and legacy
-`/api/...` namespaces) over HTTP with a permissive cookie jar and automatic
-re-login on session expiry.
+- **Sites and devices** (clients, devices, APs, switches, gateways, LANs,
+  VPNs): use the `cloud` client. On controllers 5.12+ it works against the
+  controller itself — set `BaseURL` to the controller's address and use
+  on-prem org-level credentials (`OmadacID` + `ClientID` + `ClientSecret`
+  from Settings → Platform Integration → Open API).
+- **Controller management** (site list, controller info and version,
+  reboot/shutdown, firmware, TLS certificate): use the `controller` client.
+  It also serves as the `OmadacID` discovery step for the handoff below.
 
 ## Supported
 
-Omada Software Controller **5.1.0** and later.
+Omada Software/Hardware Controller **5.12.0** and later.
 
-Method families:
+`controller/` method families:
 
-- sites (controller, site, site-by-name)
-- clients (list, get, block, unblock, reconnect, update settings, known)
-- devices (list, get, topology, LED, reboot, firmware, reset)
-- access points (list, get, ports, radios, channels)
-- switches and port profiles
-- gateways and PoE
-- LAN networks, VLANs and DHCP reservations
-- VPN policies (server / client / site-to-site) and status updates
-- firmware updates and controller updates
+- site list
+- controller info and version
+- reboot and shutdown
+- firmware install and upgrade status
+- firmware update check and release channel
+- TLS certificate
+
+## What it is
+
+`controller/` speaks the Omada controller's legacy REST API (`/api/v2/...`)
+over HTTP with a permissive cookie jar and automatic re-login on session
+expiry.
 
 ## Quick start
 
+Controller management:
+
 ```go
-client, err := controller.New("https://omada.example.com", "user", "pass")
+ctl, err := controller.New("https://omada.example.com:8043", "user", "pass")
 if err != nil { ... }
 
-sites, err := client.Sites(ctx)
+sites, err := ctl.Sites(ctx)
 if err != nil { ... }
 
-siteClient, err := client.SiteClient(ctx, sites[0].ID())
-if err != nil { ... }
+if err := ctl.Reboot(ctx); err != nil { ... }
+```
 
-// Create a VLAN-only network.
-network, err := siteClient.CreateVLAN(ctx, "office", 10)
-if err != nil { ... }
+Handoff to the cloud client for site and device management:
 
-// Block a client by MAC.
-if err := siteClient.BlockClient(ctx, "AA:BB:CC:DD:EE:FF"); err != nil { ... }
+```go
+cl, err := cloud.New(cloud.Options{
+    BaseURL:      "https://omada.example.com:8043",
+    OmadacID:     ctl.OmadacID(),
+    ClientID:     "client-id",
+    ClientSecret: "client-secret",
+})
+if err != nil { ... }
 ```
 
 ## Concurrency
 
-`Client` and `SiteClient` are safe for concurrent use. Authentication
-transitions are serialized.
+`Controller` is safe for concurrent use. Authentication transitions are
+serialized.
 
 ## Errors
 
@@ -58,15 +72,9 @@ transitions are serialized.
   `ErrLoginFailed` for code `-30109`.
 - `*ValidationError` — invalid caller input.
 
-Sentinels: `ErrLoginFailed`, `ErrLoginSessionClosed`, `ErrUnsupportedControllerVersion`,
-`ErrSiteNotFound`, `ErrConnectionFailed`, `ErrBadControllerURL`, `ErrInvalidDevice`.
-
-## Divergences from the Python library
-
-- Three defect fixes: bounded pagination, `VpnPolicies` all-pages, re-login
-  scope, plus the VLAN read-back contract message.
-- Structural notes: a single `Device` struct, a flat `Client` struct, and the
-  `ValueError` family folded into `*ValidationError`.
+Sentinels: `ErrLoginFailed`, `ErrLoginSessionClosed`,
+`ErrUnsupportedControllerVersion`, `ErrConnectionFailed`,
+`ErrBadControllerURL`.
 
 ## Cloud northbound client (`cloud/`)
 
