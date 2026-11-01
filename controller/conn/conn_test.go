@@ -174,9 +174,10 @@ func TestLoginRejectsOldVersion(t *testing.T) {
 }
 
 func TestLoginVersionBoundary(t *testing.T) {
+	// 5.11.9 is below the 5.12 floor and must be rejected.
 	ts := newTestServer(t)
 	ts.on("GET /api/info", func(w http.ResponseWriter, r *http.Request) {
-		ts.json(w, 200, map[string]any{"errorCode": 0, "controllerVer": "5.1.0", "omadacId": "abc"})
+		ts.json(w, 200, map[string]any{"errorCode": 0, "controllerVer": "5.11.9", "omadacId": "abc"})
 	})
 	ts.on("POST /abc/api/v2/login", func(w http.ResponseWriter, r *http.Request) {
 		ts.json(w, 200, map[string]any{"errorCode": 0, "result": map[string]any{"token": "t"}})
@@ -185,8 +186,25 @@ func TestLoginVersionBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.login(context.Background()); err != nil {
-		t.Errorf("5.1.0 must be accepted, got %v", err)
+	if _, err := c.login(context.Background()); !errors.Is(err, models.ErrUnsupportedControllerVersion) {
+		t.Errorf("5.11.9: got %v, want models.ErrUnsupportedControllerVersion", err)
+	}
+
+	for _, ver := range []string{"5.12", "5.12.0"} {
+		ts := newTestServer(t)
+		ts.on("GET /api/info", func(w http.ResponseWriter, r *http.Request) {
+			ts.json(w, 200, map[string]any{"errorCode": 0, "controllerVer": ver, "omadacId": "abc"})
+		})
+		ts.on("POST /abc/api/v2/login", func(w http.ResponseWriter, r *http.Request) {
+			ts.json(w, 200, map[string]any{"errorCode": 0, "result": map[string]any{"token": "t"}})
+		})
+		c, err := newConn(ts.URL, "user", "pass", &http.Client{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.login(context.Background()); err != nil {
+			t.Errorf("%s must be accepted, got %v", ver, err)
+		}
 	}
 }
 
@@ -321,7 +339,7 @@ func TestControllerInfoUnauthenticated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	min := models.ParseVersionMust("5.1.0")
+	min := models.ParseVersionMust("5.12.0")
 	if v.Compare(min) < 0 {
 		t.Errorf("version %v below minimum", v)
 	}

@@ -123,7 +123,7 @@ func (c *conn) openapiURL(version, endpoint, site string) string {
 	return c.base + "/openapi/" + version + "/" + id + "/" + endpoint
 }
 
-var minControllerVersion = models.ParseVersionMust("5.1.0")
+var minControllerVersion = models.ParseVersionMust("5.12.0")
 
 // clearLoginState drops csrf state and the session cookies for this host.
 // Callers must hold authMu.
