@@ -9,11 +9,7 @@ import (
 
 	"github.com/RonaldPhilipsen/omada/controller/conn"
 	models "github.com/RonaldPhilipsen/omada/controller/models"
-	"github.com/RonaldPhilipsen/omada/controller/site"
 )
-
-// SiteClient is the site-scoped API handle, defined in the site package.
-type SiteClient = site.SiteClient
 
 // UpdateSection is the firmware update section, defined in the models package.
 type UpdateSection = models.UpdateSection
@@ -109,32 +105,6 @@ func (cl *Controller) Sites(ctx context.Context) ([]models.Site, error) {
 	return sites, nil
 }
 
-// Site returns the site with the given controller site ID.
-func (cl *Controller) Site(ctx context.Context, siteID string) (models.Site, error) {
-	if siteID == "" {
-		return models.Site{}, &models.ValidationError{Msg: "site ID must not be empty"}
-	}
-	m, err := cl.c.SiteInfo(ctx, siteID)
-	if err != nil {
-		return models.Site{}, err
-	}
-	return models.Site{Name: models.MapStr(m, "name"), ID: models.MapStr(m, "id")}, nil
-}
-
-// SiteByName resolves a site by display name.
-func (cl *Controller) SiteByName(ctx context.Context, name string) (models.Site, error) {
-	sites, err := cl.Sites(ctx)
-	if err != nil {
-		return models.Site{}, err
-	}
-	for _, s := range sites {
-		if s.Name == name {
-			return s, nil
-		}
-	}
-	return models.Site{}, fmt.Errorf("%w: site %q", models.ErrSiteNotFound, name)
-}
-
 // models.ControllerInfo fetches unauthenticated controller diagnostic information.
 func (cl *Controller) ControllerInfo(ctx context.Context) (models.ControllerInfo, error) {
 	m, err := cl.c.ControllerInfo(ctx)
@@ -179,14 +149,6 @@ func (cl *Controller) GetControllerUpgradeStatus(ctx context.Context) (*models.H
 	}
 	status := models.NewHardwareUpgradeStatus(m)
 	return &status, nil
-}
-
-// SiteClient validates the site and returns a site-scoped client handle.
-func (cl *Controller) SiteClient(ctx context.Context, siteID string) (*site.SiteClient, error) {
-	if _, err := cl.Site(ctx, siteID); err != nil {
-		return nil, err
-	}
-	return site.NewSiteClient(cl.c, siteID), nil
 }
 
 // FirmwareUpdates checks for controller firmware updates.

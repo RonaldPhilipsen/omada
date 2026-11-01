@@ -83,43 +83,6 @@ func TestSites(t *testing.T) {
 	}
 }
 
-func TestSiteByNameMiss(t *testing.T) {
-	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/users/current" {
-			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{
-				"privilege": map[string]any{
-					"sites": []map[string]any{
-						{"name": "Home", "key": "site-2"},
-					},
-				},
-			}})
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-	site, err := cl.SiteByName(context.Background(), "Missing")
-	if err == nil {
-		t.Fatalf("SiteByName() expected error, got site %+v", site)
-	}
-	if !errors.Is(err, models.ErrSiteNotFound) {
-		t.Errorf("SiteByName() error = %v, want models.ErrSiteNotFound", err)
-	}
-}
-
-func TestSiteEmptyID(t *testing.T) {
-	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	})
-	_, err := cl.Site(context.Background(), "")
-	if err == nil {
-		t.Fatal("models.Site() expected error for empty site ID")
-	}
-	var verr *models.ValidationError
-	if !errors.As(err, &verr) {
-		t.Errorf("models.Site() error = %v, want *models.ValidationError", err)
-	}
-}
-
 func TestRebootAndShutdown(t *testing.T) {
 	var paths []string
 	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
@@ -148,24 +111,6 @@ func TestRebootAndShutdown(t *testing.T) {
 	}
 	if !found["POST "+"/"+testutil.TestControllerID+"/api/v2/cmd/shutdown"] {
 		t.Errorf("missing shutdown call, got %v", paths)
-	}
-}
-
-func TestSiteClientValidatesSite(t *testing.T) {
-	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/sites/site-1":
-			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"id": "site-1", "name": "Office"}})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
-	if _, err := cl.SiteClient(context.Background(), "site-1"); err != nil {
-		t.Fatalf("SiteClient() error = %v", err)
-	}
-	sc2, err := cl.SiteClient(context.Background(), "unknown")
-	if err == nil {
-		t.Fatalf("SiteClient() expected error for unknown site, got %+v", sc2)
 	}
 }
 
