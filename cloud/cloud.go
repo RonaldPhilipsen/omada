@@ -73,9 +73,10 @@ func New(opts Options) (*Client, error) {
 }
 
 // authTransport injects a bearer token into every request. On a 401 response
-// it force-refreshes the token and retries the request exactly once; a second
-// 401 is returned as-is (the token is refreshed again so the next request
-// starts with a fresh one).
+// it force-refreshes the token and retries the request exactly once,
+// rebuilding the request body from GetBody when available so the retry
+// carries the same body; a second 401 is returned as-is (the token is
+// refreshed again so the next request starts with a fresh one).
 type authTransport struct {
 	base http.RoundTripper
 	tp   *TokenProvider
@@ -102,6 +103,17 @@ func (t authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	retry := out.Clone(req.Context())
 	retry.Header.Set("Authorization", "Bearer "+tok)
+	// The first attempt consumed the body reader (shared with the original
+	// request); rebuild it so the retry carries the same body.
+	if out.GetBody != nil {
+		body, berr := out.GetBody()
+		if berr != nil {
+			drainAndClose(resp)
+			return nil, berr
+		}
+		retry.Body = body
+		retry.ContentLength = out.ContentLength
+	}
 	drainAndClose(resp)
 
 	resp, err = t.base.RoundTrip(retry)
