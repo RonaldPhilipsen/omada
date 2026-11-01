@@ -62,22 +62,15 @@ jobs:
       - name: Test
         run: go test ./... -race -count=1
 
-      - name: Tag Release
-        env:
-          TAG: ${{ needs.version.outputs.tag }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          git tag "$TAG"
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
-          git push origin "$TAG"
-
-      - name: Create Release
+      - name: Tag and create Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.tag }}
           RELEASE_NOTES: ${{ needs.version.outputs.release_notes }}
           PRERELEASE: ${{ needs.version.outputs.prerelease }}
         run: |
+          # gh release create also creates the tag (at the default branch HEAD)
+          # when it does not exist yet, so tag and release land in one step.
           if [ "$PRERELEASE" = 'true' ]; then
             gh release create "$TAG" --title "$TAG" --notes "$RELEASE_NOTES" --prerelease
           else
