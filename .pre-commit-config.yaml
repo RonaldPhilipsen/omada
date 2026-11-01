@@ -1,0 +1,22 @@
+# Pre-commit hooks.
+#
+# Install once per clone:  pre-commit install
+#
+# The live read-only API test probes every GET endpoint of the Omada
+# northbound API against the real controller. It skips fast when the
+# OMADA_BASE_URL / OMADA_OMADAC_ID / OMADA_CLIENT_ID / OMADA_CLIENT_SECRET
+# environment is not set, so commits work without credentials; with
+# credentials it must pass before a commit is created.
+#
+# The report is log-safe: no response bodies, resource IDs, MAC or IP
+# addresses are printed (see cloud/livetest).
+
+repos:
+  - repo: local
+    hooks:
+      - id: omada-live-read-only
+        name: omada live read-only API test
+        entry: go test -tags live ./cloud/livetest -count=1
+        language: system
+        pass_filenames: false
+        always_run: true
