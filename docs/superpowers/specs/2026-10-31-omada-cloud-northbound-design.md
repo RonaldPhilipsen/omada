@@ -25,6 +25,11 @@ hand-written.
   `github.com/oapi-codegen/runtime`. The `controller/` package stays
   stdlib-only; this dependency is scoped to `cloud/`.
 - **Group the code logically** — one package per domain, not one giant file.
+- **Dual-mode auth, single codebase** (decided 2026-10-31): `cloud/` supports
+  both the hosted flow (username/password → `Bearer`) and the on-prem
+  organization-level flow (OAuth2 client credentials → `AccessToken=`) against
+  the same generated domain packages. One client, one transport, no duplicated
+  client code between the two flows.
 
 ## What the spec contains (verified 2026-10-31)
 
@@ -57,6 +62,41 @@ Fetched from `https://use1-omada-northbound.tplinkcloud.com/v3/api-docs`
   repo) adds the missing `in: path` params (`required: true`, `string`).
   Nothing else in the spec is modified.
 
+## Auth (two verified flows)
+
+TP-Link's official Open API docs (omada-northbound-docs.tplinkcloud.com,
+OC series 6.3.0 "organization-level access guide") confirm the
+organization-level Open API — the same `/openapi/v1/{omadacId}/...` surface,
+`{"errorCode","msg","result"}` envelope, and `totalRows/currentPage/
+currentSize/data` paging as the hosted spec — is served by both **cloud**
+(Omada CBC Standard) and **on-prem** systems (OC-series hardware controller,
+software controller, ER7212PC), the latter at the controller's own address
+(e.g. `https://<controller>:8043`).
+
+Two auth flows, both to be supported by `cloud/`:
+
+1. **Hosted** (verified live against
+   `use1-omada-northbound.tplinkcloud.com`, 2026-10-31):
+   - Token: `POST {base}/v1/token`, JSON `{"username","password"}` →
+     bare (un-enveloped) `{"access_token","expires_in"}`.
+   - API calls: `Authorization: Bearer <token>`.
+   - Missing/expired token → `HTTP 401` with envelope `errorCode -44116`.
+2. **On-prem org-level** (from the official access guide):
+   - Prerequisite: an application created on the controller under
+     Settings → Platform Integration → Open API, yielding `client_id` +
+     `client_secret`.
+   - Token: `POST {base}/openapi/authorize/token?grant_type=client_credentials`,
+     JSON `{"omadacId","client_id","client_secret"}` → **enveloped**
+     `{"errorCode":0,"msg","result":{"accessToken":"AT-...","tokenType":
+     "bearer","expiresIn":7200,"refreshToken":"RT-..."}}`.
+   - API calls: `Authorization: AccessToken=<token>` (prefix is
+     `AccessToken=`, **not** `Bearer`).
+   - Access token ~2 h; refresh token ~14 days
+     (`grant_type=refresh_token`). The token is also invalidated by site
+     copy/import or application permission changes.
+   - Auth error codes: `-44112` access token expired, `-44113` access token
+     invalid, `-44114` refresh token expired, `-44116` authorized failed.
+
 ## Goals
 
 - A `cloud/` module tree with a generated client covering all 2,510 public
@@ -72,6 +112,8 @@ Fetched from `https://use1-omada-northbound.tplinkcloud.com/v3/api-docs`
 
 - The local controller API (done, in `controller/`) and any changes to it.
 - Hand-writing operation wrappers — operations come from the generator.
+- The OAuth2 **authorization code** (interactive) mode of the on-prem
+  org-level API — server-to-server client-credentials only.
 - Webhooks, event streams, or anything not in the spec.
 - Region auto-detection (caller passes the base URL; default is use1).
 - Retries with backoff beyond a single 401 token-refresh retry.
@@ -85,6 +127,10 @@ Fetched from `https://use1-omada-northbound.tplinkcloud.com/v3/api-docs`
 - No import cycles: `cloud` root → domain packages; domain packages are
   independent of each other (shared types are duplicated per package, which
   is expected and fine).
+- No duplication between `controller/` and `cloud/`: no cross-imports in
+  either direction, no shared types, no copy-pasted code. The two trees cover
+  the same domains against two different services with different wire
+  formats, so similarly-named types are intentional and never merged.
 - The spec patch script must be pure and deterministic (same input → same
   output), and must fail loudly if the upstream spec changes shape in a way
   the patch doesn't handle.
@@ -164,10 +210,27 @@ template vs live operations remain distinguishable.
 
 - `cloud.Client`: base URL (default `https://use1-omada-northbound.tplinkcloud.com`,
   overridable), an `*http.Client`, and a token provider.
-- Token provider: `POST {base}/v1/token` with JSON `{"username","password"}`;
-  caches the token until ~60 s before `expires_in`; a `RequestEditor`
-  injects `Authorization: Bearer <token>`; on an HTTP 401 response the
-  client refreshes once and retries.
+- Auth: a small internal `authenticator` interface
+  (`HeaderValue(ctx) (string, error)` — the full `Authorization` header
+  value — plus `Invalidate()`), with two implementations sharing one
+  mutex-protected token-cache discipline (valid until ~60 s before
+  expiry):
+  - **hosted**: `POST {base}/v1/token` with JSON `{"username","password"}`
+    → `HeaderValue` = `Bearer <token>`.
+  - **on-prem org-level**: `POST
+    {base}/openapi/authorize/token?grant_type=client_credentials` with JSON
+    `{"omadacId","client_id","client_secret"}` (parses the enveloped
+    response; non-zero `errorCode` is an error) → `HeaderValue` =
+    `AccessToken=<token>`. The returned `refreshToken` is not used;
+    re-authentication always re-runs the client-credentials grant (the
+    client secret is always available, and the docs' own fallback when a
+    refresh token expires is to re-run the auth process).
+  - `cloud.New` selects the implementation from `Options` (exactly one of
+    the two credential sets; both or neither is an error).
+  - A shared transport owns header injection and the 401 path: `Invalidate()`
+    → re-fetch → retry exactly once; a second 401 is surfaced.
+  - `Client.InvalidateToken()`: public escape hatch that drops the cached
+    token; the next request re-authenticates.
 - Accessors: one method per domain package returning the generated client
   pre-wired with the base URL and the auth `RequestEditor` (e.g.
   `Site() site.Client`, `Clients() client.Client`). Exact accessor naming is
@@ -203,9 +266,11 @@ template vs live operations remain distinguishable.
 
 ### Tests
 
-- Root `cloud` package: token flow (fetch, cache hit, expiry refresh, 401
-  retry-once, token-endpoint failure), base URL handling, RequestEditor
-  injection — against `httptest` mocks.
+- Root `cloud` package: both auth flows — token fetch, cache hit, expiry
+  refresh, endpoint failure (no poisoned cache), bad/enveloped-error token
+  responses, 401 retry-once, header shape (`Bearer` vs `AccessToken=`),
+  `Options` credential-set validation, base URL handling — against
+  `httptest` mocks.
 - Each domain package: representative `httptest` tests (a few operations per
   package: GET with path+query params, POST with body, response decode, 4xx
   error path). Not every operation — the generator's output is uniform;
@@ -235,6 +300,27 @@ template vs live operations remain distinguishable.
 7. The spec is fetched fresh by the maintainer at regeneration time (the raw
    spec is **not** checked in — it's 4.7 MB and changes upstream); the
    patched spec is a build artifact in `gen/` (gitignored).
+8. Dual-mode auth layout: the `authenticator` interface + shared token-cache
+   helper live in `cloud/auth.go`; the hosted provider stays in
+   `cloud/token.go` (gains a `HeaderValue` method; existing `Token`/
+   `Invalidate` API unchanged); the org-level provider goes in
+   `cloud/orgauth.go`. `cloud.Options` carries both credential sets and
+   validates exactly-one in `New`.
+9. The org-level token response is enveloped (`errorCode/msg/result`),
+   unlike the hosted token response (bare `access_token/expires_in`); each
+   authenticator parses its own shape.
+10. `BaseURL` is the single target switch: hosted = the regional
+    `*-omada-northbound.tplinkcloud.com` host; on-prem = the controller's own
+    address (scheme+host+port as shown in the controller's Platform
+    Integration settings). No separate "mode" flag beyond the credential set.
+11. On-prem token-auth failures are assumed to arrive as **HTTP 401**
+    (envelope `-44112`/`-44113`), matching the access guide's own status
+    table (401 "Unauthorized access") and the hosted service's verified
+    behavior (401 + `-44116`). The guide lists the codes without a status and
+    no on-prem controller was available to probe. If a deployment ever
+    returns 200 + envelope for an auth failure, `Client.InvalidateToken()`
+    is the recovery path; envelope-sniffing in the transport is
+    deliberately not done.
 
 ## What's left to the builder
 

@@ -14,11 +14,13 @@
 
 - Module: `github.com/RonaldPhilipsen/omada` (repo root).
 - Runtime dependencies: Go stdlib + `github.com/oapi-codegen/runtime` v1.8.0 only. `controller/` stays stdlib-only and is never modified.
+- No duplication between `controller/` (local controller API) and `cloud/` (hosted northbound API): no imports in either direction, no shared or re-exported types, no copy-pasted code. Both trees cover the same domains (gateways, clients, ...) against two different services with different wire formats; similarly-named types in both are intentional and must never be merged, aliased, or converted between. Enforced by the Task 7 cross-import check.
 - Generator pinned: oapi-codegen v2.8.1 (`$(go env GOPATH)/bin/oapi-codegen`).
 - 19 domain packages, exactly the keys of `gen/tags.json`: `ap, client, device, gateway, insight, lan, log, msp, remote, security, sim, site, stack, switch, topology, user, voip, vpn, wireless`.
 - Every public operation (2,510 of them; `/internal` paths excluded) maps to exactly one package; `gen/verify_mapping.py` enforces this and fails the build otherwise.
 - Generated files: `cloud/<pkg>/<pkg>.gen.go`, checked in, gofmt-clean, no hand-written code inside domain packages.
 - Raw spec (`gen/api-docs.json`) and patched spec (`gen/api-docs.patched.json`) are gitignored build artifacts; `gen/configs/` is derived from `gen/tags.json` and gitignored.
+- `gen/spec.sha256` (SHA-256 hex of the raw upstream spec) is **checked in**: it records the spec revision the generated code was built from and lets CI early-exit when upstream is unchanged. The raw spec itself is never cached — a fresh fetch is the drift signal.
 - Default base URL: `https://use1-omada-northbound.tplinkcloud.com`. Token endpoint: `POST {base}/v1/token` with JSON `{"username","password"}`.
 - Auth failure modes (verified against the live service): missing token → HTTP 401 with envelope `errorCode -44116`; business errors → HTTP 200 with non-zero `errorCode` envelope (`{"errorCode", "msg", "result"}`).
 - Gate (every task that touches Go code): `gofmt -l .` empty, `go vet ./...` clean, `go test ./... -race -count=1` green.
@@ -32,6 +34,7 @@ Failure modes the spec implies but no single task's tests fully exercise; each l
 3. **Token endpoint failure** (non-200 or non-JSON body) — the first authenticated request fails with a clear Go error; no half-cached token is stored. (Task 3, Step 1.)
 4. **Unexpected status from an operation** (500, HTML body) — generated clients declare only 200; the caller gets the oapi-codegen default response or an error, never a panic. (Task 6, Step 1, in the `site` package.)
 5. **Misbehaving pagination** (server returns the same page forever, or `totalRows` never reached) — `cloud.CollectAll` stops at its `maxRows` bound instead of looping forever. (Task 5, Step 1.)
+6. **On-prem org-level auth mode** — client-credentials token fetch (enveloped response; non-zero `errorCode` is an error), `AccessToken=` header shape, 401 refresh-and-retry-once identical to hosted, `Options` rejects both/neither credential sets. (Task 4b, Step 1.)
 
 ---
 
@@ -81,7 +84,7 @@ Exact content (167 tags, 19 packages — verified complete against the spec's ta
  "log": ["Audit Log", "Audit Log (Template)", "CLI", "CLI (Template)", "Log", "Log (Template)", "Webhook Setting"],
  "msp": ["MSP Device", "MSP History Data Retention", "MSP SSO", "MSP User and Role", "Msp License", "Msp Log", "Msp Webhook Setting", "Msp setting"],
  "remote": ["Remote Access", "SSH", "SSH (Template)", "Service (Template)", "UPnP", "UPnP (Template)"],
- "security": ["ACL", "ACL (Template)", "ARp Detection", "Access Control", "Access Control (Template)", "Application Control", "Attack Defense", "Attack Defense (Template)", "Bandwidth Control", "Bandwidth Control (Template)", "Dhcp Snooping", "Firewall", "Firewall (Template)", "Global Security", "IDS/IPS", "IDS/IPS (Template)", "IP-MAC Binding", "IP-MAC Binding (Template)", "MAC Filtering", "MAC Filtering (Template)", "Session Limit", "Session Limit (Template)", "Threat Management", "URL Filtering", "URL Filtering (Template)", "Wireless IDS/IPS", "Wireless IDS/IPS (Template)", "shield"],
+ "security": ["ACL", "ACL (Template)", "Arp Detection", "Access Control", "Access Control (Template)", "Application Control", "Attack Defense", "Attack Defense (Template)", "Bandwidth Control", "Bandwidth Control (Template)", "Dhcp Snooping", "Firewall", "Firewall (Template)", "Global Security", "IDS/IPS", "IDS/IPS (Template)", "IP-MAC Binding", "IP-MAC Binding (Template)", "MAC Filtering", "MAC Filtering (Template)", "Session Limit", "Session Limit (Template)", "Threat Management", "URL Filtering", "URL Filtering (Template)", "Wireless IDS/IPS", "Wireless IDS/IPS (Template)", "shield"],
  "sim": ["SIM", "SIM (Template)"],
  "site": ["Batch OpenAPI", "Cluster", "Customer", "Data Export", "MSP Batch OpenAPI", "MSP Site", "Msp Osw Port Layout", "Osw Port Layout", "Quick Action", "Site", "Site Configuration", "Site Template", "Site Template Configuration"],
  "stack": ["OLT", "OLT DBA", "OLT Gem Mapping", "OLT Gem Port", "OLT Line Profile", "OLT ONT Port", "OLT ONU Management", "OLT ONU Register", "OLT Pon Port", "OLT Service Port", "OLT Service Port Profile", "OLT Service Profile", "OLT T-cont", "OLT Traffic Profile", "Stack"],
@@ -133,7 +136,7 @@ git commit -m "feat: add northbound spec tooling (fetch, patch, tag mapping, ver
 
 **Interfaces:**
 - Consumes: Task 1's `gen/api-docs.patched.json`, `gen/tags.json`, verify command.
-- Produces: 19 Go packages, each exposing the oapi-codegen surface: `type Client interface`, `func NewClient(server string) (Client, ...)`, `func NewClientWithRequestEditor(server string, editors ...RequestEditorFn) (Client, error)`, plus all generated model types. Task 4's accessors call `NewClientWithRequestEditor` on each.
+- Produces: 19 Go packages, each exposing the oapi-codegen **v2** surface: concrete `type Client struct` (fields `Server string`, `Client HttpRequestDoer`), `func NewClient(server string, opts ...ClientOption) (*Client, error)`, options `WithHTTPClient(doer HttpRequestDoer) ClientOption` and `WithRequestEditorFn(fn RequestEditorFn) ClientOption`, plus all generated model types. Package names: `cloud/switch/` declares `package switchpkg` (`switch` is a Go reserved word); `cloud/log/` declares `package log`. Task 4's accessors call `NewClient` with `WithHTTPClient` on each.
 
 - [ ] **Step 1: Write `gen/gen_configs.py`**
 
@@ -161,7 +164,7 @@ Targets:
 - `patch`: `python3 patch_spec.py api-docs.json api-docs.patched.json`
 - `verify`: `python3 verify_mapping.py api-docs.patched.json tags.json`
 - `configs`: `python3 gen_configs.py`
-- `gen`: depends on `fetch patch verify configs`, then loops `for f in configs/*.yaml; do $(OAPI) -config $$f; done` with `OAPI ?= $(shell go env GOPATH)/bin/oapi-codegen`, then `gofmt -w ../cloud`.
+- `gen`: depends on `fetch patch verify configs`, then loops `for f in configs/*.yaml; do $(OAPI) -config $$f api-docs.patched.json; done` with `OAPI ?= $(shell go env GOPATH)/bin/oapi-codegen`, then `gofmt -w ../cloud`. (oapi-codegen v2 takes the spec path only as a CLI positional argument — there is no `input:` config field.)
 
 - [ ] **Step 3: Add the runtime dependency**
 
@@ -262,7 +265,7 @@ git commit -m "feat: add northbound token provider (client-credentials, cached)"
 - Test: `cloud/cloud_test.go`
 
 **Interfaces:**
-- Consumes: `NewTokenProvider`/`TokenProvider` (Task 3); the 19 generated packages' `NewClientWithRequestEditor(server string, editors ...RequestEditorFn) (Client, error)` (Task 2).
+- Consumes: `NewTokenProvider`/`TokenProvider` (Task 3); the 19 generated packages' `NewClient(server string, opts ...ClientOption) (*Client, error)` and `WithHTTPClient(doer HttpRequestDoer) ClientOption` (Task 2).
 - Produces:
 
 ```go
@@ -274,28 +277,28 @@ type Options struct {
 }
 func New(opts Options) (*Client, error)
 type Client struct { /* baseURL string, tp *TokenProvider, httpClient *http.Client */ }
-func (c *Client) Site() site.Client
-func (c *Client) Clients() client.Client
-func (c *Client) Devices() device.Client
-func (c *Client) Ap() ap.Client
-func (c *Client) Switch() switchpkg.Client   // import "github.com/RonaldPhilipsen/omada/cloud/switch" as switchpkg
-func (c *Client) Gateway() gateway.Client
-func (c *Client) Lan() lan.Client
-func (c *Client) Wireless() wireless.Client
-func (c *Client) Vpn() vpn.Client
-func (c *Client) Security() security.Client
-func (c *Client) Insight() insight.Client
-func (c *Client) Users() user.Client
-func (c *Client) Msp() msp.Client
-func (c *Client) Stack() stack.Client
-func (c *Client) Voip() voip.Client
-func (c *Client) Sim() sim.Client
-func (c *Client) OmadaLog() omadalog.Client  // import "cloud/log" as omadalog (name clash with stdlib log)
-func (c *Client) Topology() topology.Client
-func (c *Client) Remote() remote.Client
+func (c *Client) Site() *site.Client
+func (c *Client) Clients() *client.Client
+func (c *Client) Devices() *device.Client
+func (c *Client) Ap() *ap.Client
+func (c *Client) Switch() *switchpkg.Client   // import "github.com/RonaldPhilipsen/omada/cloud/switch" (declares package switchpkg)
+func (c *Client) Gateway() *gateway.Client
+func (c *Client) Lan() *lan.Client
+func (c *Client) Wireless() *wireless.Client
+func (c *Client) Vpn() *vpn.Client
+func (c *Client) Security() *security.Client
+func (c *Client) Insight() *insight.Client
+func (c *Client) Users() *user.Client
+func (c *Client) Msp() *msp.Client
+func (c *Client) Stack() *stack.Client
+func (c *Client) Voip() *voip.Client
+func (c *Client) Sim() *sim.Client
+func (c *Client) OmadaLog() *omadalog.Client  // import "cloud/log" as omadalog (declares package log; name clash with stdlib log)
+func (c *Client) Topology() *topology.Client
+func (c *Client) Remote() *remote.Client
 ```
 
-Auth: an `authTransport` (`http.RoundTripper`) wraps the base transport; on each `RoundTrip` it calls `tp.Token(ctx)` and sets `Authorization: Bearer <token>`; if the response is 401 it calls `tp.Invalidate()`, re-fetches, clones the request with the new header, and retries once; a second 401 is returned as-is. `New` wires `&http.Client{Transport: authTransport{...}}`.
+Auth: an `authTransport` (`http.RoundTripper`) wraps the base transport; on each `RoundTrip` it calls `tp.Token(ctx)` and sets `Authorization: Bearer <token>`; if the response is 401 it calls `tp.Invalidate()`, re-fetches, clones the request with the new header, and retries once; a second 401 is returned as-is. `New` wires `c.httpClient = &http.Client{Transport: authTransport{...}}` (or wraps `opts.HTTPClient`'s transport when provided). Each accessor passes that client to the generated one via `WithHTTPClient`, so every generated operation flows through the auth transport.
 
 - [ ] **Step 1: Write the failing tests** in `cloud/cloud_test.go`
 
@@ -320,7 +323,7 @@ Expected: build failure (`undefined: New`).
 
 - [ ] **Step 3: Implement `cloud/cloud.go`**
 
-`Options`, `New`, `Client`, `authTransport`, and the 19 accessors per the Interfaces block. Accessors call the package's `NewClientWithRequestEditor(c.baseURL)` (no editors needed — the transport owns the header); return the generated `Client` interface. `New` returns an error for empty `Username`/`Password`; default `BaseURL` when empty (strip trailing slash).
+`Options`, `New`, `Client`, `authTransport`, and the 19 accessors per the Interfaces block. Each accessor calls `pkg.NewClient(c.baseURL, pkg.WithHTTPClient(c.httpClient))` (no request editors needed — the transport owns the header), discards the returned error (it cannot fail for a valid base URL), and returns the concrete `*pkg.Client`. `New` returns an error for empty `Username`/`Password`; default `BaseURL` when empty (strip trailing slash).
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -335,6 +338,108 @@ Expected: PASS (token tests from Task 3 + all four new tests).
 ```bash
 git add cloud/cloud.go cloud/cloud_test.go
 git commit -m "feat: add cloud Client with bearer-token transport and 401 refresh"
+```
+
+---
+
+### Task 4b: Dual-mode auth (hosted + on-prem org-level)
+
+**Files:**
+- Create: `cloud/auth.go`
+- Create: `cloud/orgauth.go`
+- Create: `cloud/orgauth_test.go`
+- Modify: `cloud/token.go`
+- Modify: `cloud/cloud.go`
+- Modify: `cloud/cloud_test.go`
+
+**Interfaces:**
+- Consumes: Task 3's `TokenProvider` (hosted mode), Task 4's `Client`/`authTransport`/19 accessors.
+- Produces:
+
+```go
+// cloud/auth.go
+type authenticator interface {
+    HeaderValue(ctx context.Context) (string, error) // full Authorization header value
+    Invalidate()                                     // drop the cached token
+}
+
+// cloud/token.go — added to the existing TokenProvider (its Token/Invalidate API unchanged)
+func (tp *TokenProvider) HeaderValue(ctx context.Context) (string, error) // "Bearer <token>"
+
+// cloud/orgauth.go
+type OrgTokenProvider struct { /* baseURL, omadacID, clientID, clientSecret string, hc *http.Client, cache fields */ }
+func NewOrgTokenProvider(baseURL, omadacID, clientID, clientSecret string, hc *http.Client) *OrgTokenProvider
+func (p *OrgTokenProvider) Token(ctx context.Context) (string, error)  // client-credentials grant
+func (p *OrgTokenProvider) Invalidate()
+func (p *OrgTokenProvider) HeaderValue(ctx context.Context) (string, error) // "AccessToken=<token>"
+
+// cloud/cloud.go — changed
+type Options struct {
+    BaseURL      string
+    Username     string // hosted mode
+    Password     string // hosted mode
+    OmadacID     string // on-prem org-level mode
+    ClientID     string // on-prem org-level mode
+    ClientSecret string // on-prem org-level mode
+    HTTPClient   *http.Client
+}
+func New(opts Options) (*Client, error) // exactly one credential set; see validation below
+func (c *Client) InvalidateToken()      // drops the cached token; next request re-authenticates
+```
+
+Protocol (verified — hosted probed live; on-prem from TP-Link's official org-level access guide, oc_series 6.3.0):
+- Hosted: `POST {base}/v1/token`, JSON `{"username","password"}` → bare `{"access_token","expires_in"}`; header `Bearer <token>`.
+- On-prem: `POST {base}/openapi/authorize/token?grant_type=client_credentials`, JSON `{"omadacId","client_id","client_secret"}` → **enveloped** `{"errorCode":0,"msg","result":{"accessToken","tokenType","expiresIn","refreshToken"}}`; non-zero `errorCode` is an error; header `AccessToken=<token>`; the returned `refreshToken` is **not used** — re-auth always re-runs the client-credentials grant.
+- Both: mutex-protected cache valid until `now + expires - 60s`; the shared `authTransport` injects `authenticator.HeaderValue(ctx)` and on 401 does `Invalidate()` → re-fetch → retry exactly once (a second 401 is surfaced). On-prem token failures are assumed to arrive as HTTP 401 (design doc, builder call 11).
+- `New` validation: exactly one of {`Username`+`Password` non-empty} and {`OmadacID`+`ClientID`+`ClientSecret` non-empty}; both or neither → error. `BaseURL` defaults to the hosted US-1 endpoint **only in hosted mode**; on-prem mode with empty `BaseURL` → error. `InvalidateToken()` calls the active authenticator's `Invalidate()`.
+
+- [ ] **Step 1: Write the failing tests**
+
+`cloud/orgauth_test.go` (httptest token server):
+
+```go
+func TestOrgTokenFetchAndCache(t *testing.T)      // endpoint hit exactly once across two Token() calls; body asserts grant_type query + omadacId/client_id/client_secret fields
+func TestOrgTokenRefreshOnExpiry(t *testing.T)    // expires_in=1 (past the 60s skew) → second call refetches
+func TestOrgTokenEndpointFailure(t *testing.T)    // 500 → Token() errors, no poisoned cache, second call retries
+func TestOrgTokenEnvelopeError(t *testing.T)      // 200 with {"errorCode":-44106,...} → Token() errors
+func TestOrgTokenBadJSON(t *testing.T)            // 200 non-JSON → Token() errors
+```
+
+`cloud/cloud_test.go` additions (combined token+API mock, routed on path: `/v1/token` hosted, `/openapi/authorize/token` org, else API):
+
+```go
+func TestNewRejectsMixedCredentials(t *testing.T) // both sets → error; neither → error
+func TestNewOrgRequiresBaseURL(t *testing.T)      // org mode, empty BaseURL → error
+func TestOrgRequestCarriesAccessTokenHeader(t *testing.T) // handler asserts Authorization == "AccessToken=tok-1"
+func TestOrg401TriggersRefreshAndRetry(t *testing.T)      // first API call 401, second 200; assert 2 API hits + 2 token hits (Review Focus #6)
+func TestInvalidateToken(t *testing.T)            // InvalidateToken() forces a token refetch on the next request
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+go test ./cloud/ -run 'TestOrg|TestNew|TestInvalidate' -v
+```
+
+Expected: build failure (`undefined: NewOrgTokenProvider` etc.).
+
+- [ ] **Step 3: Implement**
+
+`cloud/auth.go` (the `authenticator` interface only — both existing and new providers satisfy it); `cloud/orgauth.go` (`OrgTokenProvider` per Interfaces, parsing the enveloped token response); `cloud/token.go` (add `HeaderValue`); `cloud/cloud.go` (`Options` per Interfaces, mode selection in `New`, `authTransport` holds an `authenticator` and uses `HeaderValue`, `InvalidateToken`). The 401-retry path keeps its current semantics, including re-sending the request body on retry (Task 4 fix). No changes to generated packages or accessors.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+```bash
+go test ./cloud/ -race -count=1
+```
+
+Expected: PASS (all hosted + org tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add cloud/auth.go cloud/orgauth.go cloud/orgauth_test.go cloud/token.go cloud/cloud.go cloud/cloud_test.go
+git commit -m "feat: add on-prem org-level client-credentials auth mode"
 ```
 
 ---
@@ -370,6 +475,8 @@ func CollectAll[T any](ctx context.Context, fetch func(ctx context.Context, page
 ```
 
 `CollectAll` guards: `pageSize < 1` → error; `maxRows < 1` → error; stops on first error from `fetch`; a page with `len(Rows) < pageSize` ends collection even if `TotalRows` is unknown.
+
+`CollectAll` mirrors the bounded-collector discipline of `controller/conn/pagination.go` (`collectPages`: hard page cap, stop on short page or `totalRows`), but is **independent code by design** — the two APIs have different wire formats (typed generated structs vs `map[string]any`), so the logic is deliberately not shared or extracted into a common package (Global Constraints: no duplication between `controller/` and `cloud/`).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -423,7 +530,7 @@ git commit -m "feat: add APIError envelope helper and bounded paging collector"
 - Test: `cloud/<pkg>/<pkg>_test.go` for each of the 19 packages
 
 **Interfaces:**
-- Consumes: the generated packages' `NewClientWithRequestEditor` and operation methods (Task 2); `cloud.NewAPIError` (Task 5) in the `site` package's envelope test.
+- Consumes: the generated packages' `NewClient(server, opts ...ClientOption) (*Client, error)` and operation methods (Task 2); `cloud.NewAPIError` (Task 5) in the `site` package's envelope test.
 - Produces: nothing (verification layer).
 
 Per package, write one test file with **three tests**:
@@ -468,21 +575,67 @@ git commit -m "test: add representative httptest coverage for all 19 domain pack
 
 - [ ] **Step 1: Add a `cloud/` section to `README.md`**
 
-Document: what it is (generated northbound client, 2,510 operations, 19 domain packages); the one extra dependency (`github.com/oapi-codegen/runtime`); construction example (`cloud.New(cloud.Options{Username: ..., Password: ...})` then `cl.Site().<op>(...)`); the envelope convention (200 + `errorCode != 0` is a failure — use `cloud.NewAPIError`); the `cloud.CollectAll` paging helper; regeneration (`make -C gen gen`, requires oapi-codegen v2.8.1); the verified auth behavior (401 + refresh once).
+Document: what it is (generated northbound client, 2,510 operations, 19 domain packages); the one extra dependency (`github.com/oapi-codegen/runtime`); **both auth modes** — hosted (`cloud.New(cloud.Options{BaseURL: <default>, Username: ..., Password: ...})`, `Bearer` header) and on-prem org-level (`cloud.New(cloud.Options{BaseURL: <controller address>, OmadacID: ..., ClientID: ..., ClientSecret: ...})`, `AccessToken=` header; application created under Settings → Platform Integration → Open API on the controller) — then `cl.Site().<op>(...)`; the envelope convention (200 + `errorCode != 0` is a failure — use `cloud.NewAPIError`); the `cloud.CollectAll` paging helper; `InvalidateToken()`; regeneration (`make -C gen gen`, requires oapi-codegen v2.8.1); the verified auth behavior (401 + refresh once); the spec-drift CI job and `gen/spec.sha256` fingerprint.
 
 - [ ] **Step 2: Final gate**
 
 ```bash
 gofmt -l . && go vet ./... && go test ./... -race -count=1
+! grep -rn "omada/controller" cloud/
+! grep -rn "omada/cloud" controller/
 ```
 
-Expected: no unformatted files, vet clean, all tests PASS.
+Expected: no unformatted files, vet clean, all tests PASS, and neither grep matches — no imports (hence no duplication) between the `controller/` and `cloud/` trees.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add README.md
 git commit -m "docs: document cloud northbound client"
+```
+
+---
+
+### Task 8: CI — upstream spec drift check + regeneration PR
+
+**Files:**
+- Create: `gen/spec.sha256`
+- Create: `.github/workflows/spec-regen.yml`
+- Modify: `gen/Makefile`
+
+**Interfaces:**
+- Consumes: Task 1's pipeline (`fetch_spec.py`, `patch_spec.py`, `verify_mapping.py`, `tags.json`), Task 2's `gen/Makefile` + generated `cloud/<pkg>/<pkg>.gen.go`.
+- Produces: a scheduled GitHub Actions workflow that opens (or updates) a pull request when the upstream spec changes; a committed spec fingerprint `gen/spec.sha256`.
+
+Design (user-directed 2026-10-31; spec caching ruled out — the fresh fetch is the drift signal):
+- The raw spec is **always fetched fresh, never cached**.
+- **Early exit via committed fingerprint:** hash the fresh raw spec (`sha256sum`) and compare with `gen/spec.sha256`; identical → the job ends without patching/generating. This skips the expensive step (generating 19 packages / ~530k lines) on the common no-change run.
+- **On drift:** patch → verify → generate → `git diff` against the checked-in `cloud/`. If the generated code is unchanged (spec-only churn with no code impact), end without a PR. If changed: run the full gate (`gofmt -l .` empty, `go vet ./...`, `go test ./... -race -count=1`), commit the regenerated files **plus the updated `gen/spec.sha256`**, push branch `bot/omada-spec-regen`, and create a PR via `gh` (GITHUB_TOKEN); if a PR for that branch already exists, update it instead of opening a duplicate.
+- `gen/tags.json` mapping drift (a new upstream tag) fails `verify_mapping.py` → the job fails loudly; a human extends `tags.json`. No PR.
+- No new runtime dependencies; the workflow installs the pinned generator: `go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.1` (Go module cache via `actions/setup-go` is the only caching).
+- Trigger: `schedule` (daily cron) + `workflow_dispatch`. Permissions: `contents: write`, `pull-requests: write`.
+
+- [ ] **Step 1: Commit the fingerprint**
+
+Fetch the spec fresh (`make -C gen fetch`) and write `gen/spec.sha256` (`sha256sum gen/api-docs.json`, hex digest + filename). This file is checked in (not gitignored).
+
+- [ ] **Step 2: Fix the Makefile generate loop**
+
+Resolve the deferred Task 2 finding: the `for f in configs/*.yaml; do ...; done` loop must propagate any per-package oapi-codegen failure (e.g. `|| exit 1` per iteration), so a mid-loop failure fails `make gen` — CI depends on this. Verify with a fault injection (a temporarily broken config → non-zero exit) and revert the injection.
+
+- [ ] **Step 3: Write `.github/workflows/spec-regen.yml`**
+
+Single job per the Design block above: checkout → setup-go (`go-version-file: go.mod`) → `go install` pinned oapi-codegen → `make -C gen fetch` → fingerprint compare (early exit) → `make -C gen patch verify configs` → generate (strict loop) → drift diff → gate → commit + push + `gh pr create`/update.
+
+- [ ] **Step 4: Verify what can be verified locally**
+
+Validate the workflow YAML parses (`python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/spec-regen.yml'))"`); simulate the fingerprint early-exit and drift paths locally against a scratch checkout (hash-unchanged → no work; hash-changed → diff detected). The live `schedule`/`gh pr` path is exercised by the first `workflow_dispatch` run after merge.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add gen/spec.sha256 gen/Makefile .github/workflows/spec-regen.yml
+git commit -m "ci: add upstream spec drift check with regeneration PR"
 ```
 
 ---
