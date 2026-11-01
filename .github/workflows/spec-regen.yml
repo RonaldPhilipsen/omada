@@ -9,9 +9,13 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: spec-regen
+
 jobs:
   regen:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,7 +93,16 @@ jobs:
           sha256sum gen/api-docs.json > gen/spec.sha256
           git add gen/spec.sha256 cloud/
           git commit -m "chore(gen): regenerate cloud client from upstream spec drift"
-          git push --force-with-lease origin HEAD:refs/heads/bot/omada-spec-regen
+          # actions/checkout does not fetch the bot branch, so a bare
+          # --force-with-lease would treat the existing remote ref as stale and
+          # reject the push on every run after the first. Pass the expected
+          # remote SHA explicitly; plain push on first run.
+          remote_sha="$(git ls-remote origin refs/heads/bot/omada-spec-regen | awk '{print $1}')"
+          if [ -n "$remote_sha" ]; then
+            git push --force-with-lease=bot/omada-spec-regen:"$remote_sha" origin HEAD:refs/heads/bot/omada-spec-regen
+          else
+            git push origin HEAD:refs/heads/bot/omada-spec-regen
+          fi
 
       - name: Create or update pull request
         if: steps.drift.outputs.drift == 'yes'
