@@ -299,31 +299,6 @@ func (c InterfaceDetails) Raw() map[string]any { return c.raw }
 // ControllerName is the display name of the controller.
 func (c InterfaceDetails) ControllerName() string { return MapStr(c.raw, "controllerName") }
 
-// FirmwareUpdate wraps a device firmware update entry.
-type FirmwareUpdate struct {
-	raw map[string]any
-}
-
-func NewFirmwareUpdate(m map[string]any) FirmwareUpdate {
-	return FirmwareUpdate{raw: m}
-}
-
-func (c FirmwareUpdate) Raw() map[string]any { return c.raw }
-
-// CurrentVersion is the device's current firmware version.
-func (c FirmwareUpdate) CurrentVersion() string { return MapStr(c.raw, "curFwVer") }
-
-// LatestVersion is the latest available firmware version.
-func (c FirmwareUpdate) LatestVersion() string {
-	if v := MapStr(c.raw, "lastFwVer"); v != "" {
-		return v
-	}
-	return c.CurrentVersion()
-}
-
-// ReleaseNotes are the release notes for the new firmware.
-func (c FirmwareUpdate) ReleaseNotes() string { return MapStr(c.raw, "fwReleaseLog") }
-
 func strippedPtr(s string) *string {
 	s = strings.TrimSpace(s)
 	if s == "" {
