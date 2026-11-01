@@ -1,0 +1,110 @@
+name: spec-regen
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install pinned oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.1
+
+      - name: Fetch fresh upstream spec
+        run: make -C gen fetch
+
+      - name: Compare spec fingerprint
+        id: fingerprint
+        run: |
+          set -euo pipefail
+          fresh="$(sha256sum gen/api-docs.json | awk '{print $1}')"
+          committed="$(awk '{print $1}' gen/spec.sha256)"
+          if [ "$fresh" = "$committed" ]; then
+            echo "spec=unchanged" >> "$GITHUB_OUTPUT"
+            echo "Upstream spec unchanged (sha256 ${fresh}); nothing to do."
+            exit 0
+          fi
+          echo "spec=changed" >> "$GITHUB_OUTPUT"
+          echo "Upstream spec changed: committed=${committed} fresh=${fresh}"
+
+      # Patch, verify the tags.json mapping, and write per-package configs.
+      # If upstream added a tag that tags.json does not map, verify_mapping.py
+      # fails here and the job fails loudly with no PR; a human extends tags.json.
+      - name: Patch, verify mapping, write configs
+        if: steps.fingerprint.outputs.spec == 'changed'
+        run: make -C gen patch verify configs
+
+      # Strict loop: any per-package oapi-codegen failure fails this step.
+      - name: Generate (strict loop)
+        if: steps.fingerprint.outputs.spec == 'changed'
+        run: make -C gen generate
+
+      - name: Check for generated-code drift
+        id: drift
+        if: steps.fingerprint.outputs.spec == 'changed'
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- cloud/)" ]; then
+            echo "drift=yes" >> "$GITHUB_OUTPUT"
+            echo "Generated code changed; opening a PR."
+            git status --porcelain -- cloud/
+          else
+            echo "drift=no" >> "$GITHUB_OUTPUT"
+            echo "Spec changed but generated code is unchanged; no PR needed."
+          fi
+
+      - name: Gate (gofmt, vet, tests)
+        if: steps.drift.outputs.drift == 'yes'
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt: unformatted files:"
+            echo "$unformatted"
+            exit 1
+          fi
+          go vet ./...
+          go test ./... -race -count=1
+
+      - name: Commit and push
+        if: steps.drift.outputs.drift == 'yes'
+        run: |
+          set -euo pipefail
+          git config user.name "omada-spec-bot"
+          git config user.email "omada-spec-bot@users.noreply.github.com"
+          sha256sum gen/api-docs.json > gen/spec.sha256
+          git add gen/spec.sha256 cloud/
+          git commit -m "chore(gen): regenerate cloud client from upstream spec drift"
+          git push --force-with-lease origin HEAD:refs/heads/bot/omada-spec-regen
+
+      - name: Create or update pull request
+        if: steps.drift.outputs.drift == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          branch="bot/omada-spec-regen"
+          if gh pr list --repo "$GH_REPO" --head "$branch" --state open --json number -q '.[0].number' | grep -q .; then
+            echo "Open PR already exists for ${branch}; the push above updated it."
+          else
+            gh pr create \
+              --repo "$GH_REPO" \
+              --head "$branch" \
+              --title "chore(gen): regenerate cloud client from upstream spec drift" \
+              --body "The upstream Omada northbound spec changed. Regenerated the cloud client packages with the pinned oapi-codegen v2.8.1 pipeline and updated the committed fingerprint gen/spec.sha256. Opened automatically by the spec-regen workflow."
+          fi

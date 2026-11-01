@@ -1,6 +1,6 @@
 OAPI ?= $(shell go env GOPATH)/bin/oapi-codegen
 
-.PHONY: fetch patch verify configs gen
+.PHONY: fetch patch verify configs generate gen
 
 fetch:
 	python3 fetch_spec.py
@@ -14,6 +14,8 @@ verify:
 configs:
 	python3 gen_configs.py
 
-gen: fetch patch verify configs
-	for f in configs/*.yaml; do $(OAPI) -config $$f api-docs.patched.json; done
+generate:
+	for f in configs/*.yaml; do $(OAPI) -config $$f api-docs.patched.json || exit 1; done
 	gofmt -w ../cloud
+
+gen: fetch patch verify configs generate
