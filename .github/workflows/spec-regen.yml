@@ -112,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           branch="bot/omada-spec-regen"
-          if gh pr list --repo "$GH_REPO" --head "$branch" --state open --json number -q '.[0].number' | grep -q .; then
+          if gh pr list --repo "$GH_REPO" --head "$branch" --state open --json number -q 'length > 0' | grep -q true; then
             echo "Open PR already exists for ${branch}; the push above updated it."
           else
             gh pr create \
