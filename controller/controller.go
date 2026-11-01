@@ -82,6 +82,11 @@ func New(controllerURL, username, password string, opts ...Option) (*Controller,
 	return cl, nil
 }
 
+// OmadacID returns the controller's Omada ID (omadacId). It is available
+// after New succeeds and feeds cloud.Options.OmadacID for the on-prem
+// handoff to the cloud client.
+func (cl *Controller) OmadacID() string { return cl.c.ControllerID() }
+
 // Sites lists the sites the current user can administer.
 func (cl *Controller) Sites(ctx context.Context) ([]models.Site, error) {
 	m, err := cl.c.RequestEndpoint(ctx, "GET", "v2", "users/current", "", nil, nil)

@@ -23,6 +23,16 @@ func TestNewLogsInOnce(t *testing.T) {
 	}
 }
 
+func TestOmadacID(t *testing.T) {
+	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer cl.Close()
+	if got := cl.OmadacID(); got != testutil.TestControllerID {
+		t.Errorf("OmadacID() = %q, want %q", got, testutil.TestControllerID)
+	}
+}
+
 func TestClientControllerInfo(t *testing.T) {
 	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/info" {

@@ -39,6 +39,8 @@ type Connection interface {
 	ControllerVersion(ctx context.Context) (models.Version, error)
 	// BuildURL joins the endpoint onto the base under the current controller ID.
 	BuildURL(api, endpoint, site string) string
+	// ControllerID returns the controller ID captured at login.
+	ControllerID() string
 	// CSRFToken returns the current CSRF token snapshot.
 	CSRFToken() string
 	// CloseIdleConnections releases pooled idle connections.
@@ -464,6 +466,13 @@ func (c *conn) SiteVersion(ctx context.Context, site string) (models.Version, er
 		return models.Version{}, err
 	}
 	return models.ParseVersion(models.MapStr(info, "controllerVer"))
+}
+
+// ControllerID returns the controller ID captured at login.
+func (c *conn) ControllerID() string {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.controllerID
 }
 
 // CSRFToken returns the current CSRF token snapshot.
