@@ -93,3 +93,13 @@ func (tp *TokenProvider) Invalidate() {
 	tp.token = ""
 	tp.expiresAt = time.Time{}
 }
+
+// HeaderValue returns the full Authorization header value for a request:
+// "Bearer <token>".
+func (tp *TokenProvider) HeaderValue(ctx context.Context) (string, error) {
+	tok, err := tp.Token(ctx)
+	if err != nil {
+		return "", err
+	}
+	return "Bearer " + tok, nil
+}

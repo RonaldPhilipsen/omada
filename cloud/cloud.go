@@ -29,80 +29,102 @@ import (
 
 const defaultBaseURL = "https://use1-omada-northbound.tplinkcloud.com"
 
-// Options configures a northbound cloud Client. Username and Password are
-// required; BaseURL defaults to the US-1 northbound endpoint.
+// Options configures a northbound cloud Client. Exactly one credential set
+// is required: hosted (Username + Password) or on-prem org-level
+// (OmadacID + ClientID + ClientSecret). BaseURL defaults to the US-1
+// northbound endpoint only in hosted mode; it is required in on-prem mode.
 type Options struct {
-	BaseURL    string
-	Username   string
-	Password   string
-	HTTPClient *http.Client
+	BaseURL      string
+	Username     string // hosted mode
+	Password     string // hosted mode
+	OmadacID     string // on-prem org-level mode
+	ClientID     string // on-prem org-level mode
+	ClientSecret string // on-prem org-level mode
+	HTTPClient   *http.Client
 }
 
 // Client is a northbound Omada cloud API client. Every domain accessor
-// returns a generated client whose requests flow through the bearer-token
-// auth transport.
+// returns a generated client whose requests flow through the auth transport.
 type Client struct {
 	baseURL    string
-	tp         *TokenProvider
+	auth       authenticator
 	httpClient *http.Client
 }
 
-// New creates a Client. It returns an error when Username or Password is empty.
+// New creates a Client. Exactly one credential set must be provided: hosted
+// (Username + Password) or on-prem org-level (OmadacID + ClientID +
+// ClientSecret); both or neither is an error. BaseURL defaults to the
+// hosted US-1 endpoint only in hosted mode; on-prem mode requires an
+// explicit BaseURL.
 func New(opts Options) (*Client, error) {
-	if opts.Username == "" {
-		return nil, errors.New("cloud: Options.Username is required")
+	hosted := opts.Username != "" && opts.Password != ""
+	org := opts.OmadacID != "" && opts.ClientID != "" && opts.ClientSecret != ""
+	if hosted == org {
+		return nil, errors.New("cloud: exactly one credential set is required: hosted (Username + Password) or on-prem org-level (OmadacID + ClientID + ClientSecret)")
 	}
-	if opts.Password == "" {
-		return nil, errors.New("cloud: Options.Password is required")
-	}
+
 	baseURL := opts.BaseURL
-	if baseURL == "" {
-		baseURL = defaultBaseURL
+	if hosted {
+		if baseURL == "" {
+			baseURL = defaultBaseURL
+		}
+	} else if baseURL == "" {
+		return nil, errors.New("cloud: Options.BaseURL is required in on-prem org-level mode")
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 
-	tp := NewTokenProvider(baseURL, opts.Username, opts.Password, opts.HTTPClient)
+	var auth authenticator
+	if hosted {
+		auth = NewTokenProvider(baseURL, opts.Username, opts.Password, opts.HTTPClient)
+	} else {
+		auth = NewOrgTokenProvider(baseURL, opts.OmadacID, opts.ClientID, opts.ClientSecret, opts.HTTPClient)
+	}
 
 	var base http.RoundTripper = http.DefaultTransport
 	if opts.HTTPClient != nil && opts.HTTPClient.Transport != nil {
 		base = opts.HTTPClient.Transport
 	}
-	httpClient := &http.Client{Transport: authTransport{base: base, tp: tp}}
+	httpClient := &http.Client{Transport: authTransport{base: base, auth: auth}}
 
-	return &Client{baseURL: baseURL, tp: tp, httpClient: httpClient}, nil
+	return &Client{baseURL: baseURL, auth: auth, httpClient: httpClient}, nil
 }
 
-// authTransport injects a bearer token into every request. On a 401 response
+// InvalidateToken drops the cached token so the next request re-authenticates.
+func (c *Client) InvalidateToken() {
+	c.auth.Invalidate()
+}
+
+// authTransport injects an auth header into every request. On a 401 response
 // it force-refreshes the token and retries the request exactly once,
 // rebuilding the request body from GetBody when available so the retry
 // carries the same body; a second 401 is returned as-is (the token is
 // refreshed again so the next request starts with a fresh one).
 type authTransport struct {
 	base http.RoundTripper
-	tp   *TokenProvider
+	auth authenticator
 }
 
 func (t authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	tok, err := t.tp.Token(req.Context())
+	tok, err := t.auth.HeaderValue(req.Context())
 	if err != nil {
 		return nil, err
 	}
 	out := req.Clone(req.Context())
-	out.Header.Set("Authorization", "Bearer "+tok)
+	out.Header.Set("Authorization", tok)
 
 	resp, err := t.base.RoundTrip(out)
 	if err != nil || resp.StatusCode != http.StatusUnauthorized {
 		return resp, err
 	}
 
-	t.tp.Invalidate()
-	tok, err = t.tp.Token(req.Context())
+	t.auth.Invalidate()
+	tok, err = t.auth.HeaderValue(req.Context())
 	if err != nil {
 		drainAndClose(resp)
 		return nil, err
 	}
 	retry := out.Clone(req.Context())
-	retry.Header.Set("Authorization", "Bearer "+tok)
+	retry.Header.Set("Authorization", tok)
 	// The first attempt consumed the body reader (shared with the original
 	// request); rebuild it so the retry carries the same body.
 	if out.GetBody != nil {
@@ -121,8 +143,8 @@ func (t authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
-		t.tp.Invalidate()
-		_, _ = t.tp.Token(req.Context())
+		t.auth.Invalidate()
+		_, _ = t.auth.HeaderValue(req.Context())
 	}
 	return resp, nil
 }
