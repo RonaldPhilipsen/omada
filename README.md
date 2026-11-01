@@ -167,9 +167,11 @@ requests made that way bypass the auth transport.
 
 ### Errors
 
-Every northbound response uses the `{errorCode, msg, result}` envelope. A
-business failure is **HTTP 200 with a non-zero `errorCode`**, not a non-2xx
-status. Generated clients do not inspect the envelope, so check it after each
+Most API operation responses use the `{errorCode, msg, result}` envelope, but
+some spec operations declare a bare payload (e.g. `getTags_1`,
+`getUnresolvedIncidentCount`) — check the operation's declared response
+schema. A business failure is **HTTP 200 with a non-zero `errorCode`**, not a
+non-2xx status. Generated clients do not inspect the envelope, so check it after each
 call and return `cloud.NewAPIError(code, msg)`, a `*cloud.APIError` whose
 `Code` and `Msg` carry the service values.
 
