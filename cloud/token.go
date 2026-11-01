@@ -82,7 +82,7 @@ func (tp *TokenProvider) Token(ctx context.Context) (string, error) {
 	}
 
 	tp.token = tr.AccessToken
-	tp.expiresAt = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second - refreshSkew)
+	tp.expiresAt = time.Now().Add(time.Duration(tr.ExpiresIn)*time.Second - refreshSkew)
 	return tp.token, nil
 }
 
