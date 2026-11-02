@@ -2,12 +2,18 @@ name: live-api
 
 # Live read-only API test against the real Omada controller.
 #
-# Runs nightly and on manual dispatch. It is deliberately not part of the
-# PR gate: live tests are flaky by nature, hit a rate-limited controller,
-# and environment secrets are not available to fork pull requests.
+# Runs nightly, on manual dispatch, and on pull requests that touch the
+# live test itself (cloud/livetest/**) or this workflow. It runs on the
+# self-hosted `omada-runner` (on the controller's LAN) and probes the
+# controller sequentially through both access paths:
+#   1. on-premises: the Interface Access Address (LAN)
+#   2. cloud:       the public internet-facing address
+# The second run only starts if the first passes. Environment secrets are
+# not available to fork pull requests, so the test skips fast there.
 #
 # The Test environment must define:
-#   OMADA_TEST_BASE_URL      controller address (scheme, host, port)
+#   OMADA_TEST_BASE_URL      on-premises controller address (LAN)
+#   OMADA_TEST_CLOUD_URL     public controller address
 #   OMADA_TEST_OMADAC_ID     organization id
 #   OMADA_TEST_CLIENT_ID     read-only Open API application client id
 #   OMADA_TEST_CLIENT_SECRET read-only Open API application client secret
@@ -20,6 +26,10 @@ on:
   schedule:
     - cron: "30 6 * * *"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "cloud/livetest/**"
+      - ".github/workflows/live-api.yml"
 
 permissions:
   contents: read
@@ -31,7 +41,7 @@ concurrency:
 jobs:
   read-only:
     environment: Test
-    runs-on: ubuntu-latest
+    runs-on: omada-runner
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -43,18 +53,28 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Live read-only API test
+      - name: Live read-only API test (on-premises)
         env:
           OMADA_BASE_URL: ${{ secrets.OMADA_TEST_BASE_URL }}
           OMADA_OMADAC_ID: ${{ secrets.OMADA_TEST_OMADAC_ID }}
           OMADA_CLIENT_ID: ${{ secrets.OMADA_TEST_CLIENT_ID }}
           OMADA_CLIENT_SECRET: ${{ secrets.OMADA_TEST_CLIENT_SECRET }}
-          # The test controller serves the stock self-signed certificate
-          # (CN=localhost, no SAN); verification must be skipped for it.
+          # Both addresses serve the stock self-signed certificate
+          # (CN=localhost, no SAN); verification must be skipped.
           # Remove this once a proper certificate is installed.
           OMADA_INSECURE_TLS: "true"
           # The controller rate-limits fast bursts (envelope errorCode
           # -7132). A 100ms pause keeps the ~1,000-call run under the
           # limit so the report reflects real endpoint behavior.
+          OMADA_LIVE_DELAY: "100ms"
+        run: go test -tags live ./cloud/livetest -v -count=1
+
+      - name: Live read-only API test (cloud)
+        env:
+          OMADA_BASE_URL: ${{ secrets.OMADA_TEST_CLOUD_URL }}
+          OMADA_OMADAC_ID: ${{ secrets.OMADA_TEST_OMADAC_ID }}
+          OMADA_CLIENT_ID: ${{ secrets.OMADA_TEST_CLIENT_ID }}
+          OMADA_CLIENT_SECRET: ${{ secrets.OMADA_TEST_CLIENT_SECRET }}
+          OMADA_INSECURE_TLS: "true"
           OMADA_LIVE_DELAY: "100ms"
         run: go test -tags live ./cloud/livetest -v -count=1

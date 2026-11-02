@@ -143,9 +143,10 @@ Probes (all from this machine, 2026-11-01/02):
 - **Read-only:** the application credentials are read-only; the test only
   calls GET operations (the table is generated from GETs only). Do not add
   write calls.
-- **CI trigger choice:** nightly + `workflow_dispatch` only (user-approved).
-  Not on PRs — live tests are flaky, rate-limited, and fork PRs can't read
-  environment secrets.
+- **CI trigger choice:** nightly + `workflow_dispatch` + PRs that touch the
+  live test itself (`cloud/livetest/**` or `live-api.yml`), all on the
+  self-hosted `omada-runner` (user-approved 2026-11-02). Fork PRs can't
+  read environment secrets, so the test skips fast there.
 - **Repo conventions:** pin action SHAs in workflows with `# vX` comments;
   generated `*.gen.go` files are checked in; the gate is
   `gofmt -l .` + `go vet ./...` + `go test ./... -race -count=1`;
@@ -224,11 +225,21 @@ happened and what changed in the branch:
    `Config.PerOpDelay`, read from `OMADA_LIVE_DELAY`.
 
 4. **CI wired up.** The GitHub `Test` environment now defines
-   `OMADA_TEST_BASE_URL` (`https://omada.rphilipsen.nl:443` — the public
-   host, since GitHub runners cannot reach the LAN `192.168.0.2`),
-   `OMADA_TEST_OMADAC_ID`, plus the pre-existing `OMADA_TEST_CLIENT_ID` /
+   `OMADA_TEST_BASE_URL`, `OMADA_TEST_CLOUD_URL`, `OMADA_TEST_OMADAC_ID`,
+   plus the pre-existing `OMADA_TEST_CLIENT_ID` /
    `OMADA_TEST_CLIENT_SECRET`. `live-api.yml` sets `OMADA_LIVE_DELAY: 100ms`
-   and keeps `OMADA_INSECURE_TLS: "true"` (stock self-signed cert).
+   and keeps `OMADA_INSECURE_TLS: "true"` (stock self-signed cert on both
+   addresses).
+5. **Self-hosted runner + dual-endpoint run (user request, 2026-11-02).**
+   The job runs on the self-hosted `omada-runner` (on the controller's
+   LAN) and probes the controller sequentially through both access paths:
+   on-premises (`OMADA_TEST_BASE_URL` = `https://192.168.0.2:443`, the
+   Interface Access Address) then cloud/public
+   (`OMADA_TEST_CLOUD_URL` = `https://omada.rphilipsen.nl:443`); the
+   second run only starts if the first passes. The workflow also triggers
+   on PRs touching `cloud/livetest/**` or the workflow file. Note: the
+   TP-Link `tplinkcloud.com` cloud hosts still 403 the token endpoint —
+   both addresses above are the controller's own.
 
 Result (both LAN and public host, with `OMADA_LIVE_DELAY=100ms`):
 

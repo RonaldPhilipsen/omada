@@ -278,9 +278,12 @@ The test is wired into:
 - **Pre-commit** (`.pre-commit-config.yaml`): `pre-commit install` once per
   clone; the hook runs the live test on every commit and skips fast when the
   `OMADA_*` environment is not set.
-- **CI** (`.github/workflows/live-api.yml`): nightly (06:30 UTC) and
-  `workflow_dispatch`, running in the GitHub `Test` environment, which must
-  define `OMADA_TEST_BASE_URL`, `OMADA_TEST_OMADAC_ID`,
+- **CI** (`.github/workflows/live-api.yml`): nightly (06:30 UTC),
+  `workflow_dispatch`, and pull requests that touch `cloud/livetest/**` or
+  the workflow itself. It runs on the self-hosted `omada-runner` and probes
+  the controller sequentially through the on-premises (LAN) and public
+  (cloud) addresses, using the GitHub `Test` environment secrets
+  `OMADA_TEST_BASE_URL`, `OMADA_TEST_CLOUD_URL`, `OMADA_TEST_OMADAC_ID`,
   `OMADA_TEST_CLIENT_ID` and `OMADA_TEST_CLIENT_SECRET`.
 
 Regenerate the live table after a spec regeneration:
