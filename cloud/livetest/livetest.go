@@ -13,6 +13,12 @@
 // and build with the live tag:
 //
 //	go test -tags live ./cloud/livetest -v
+//
+// Optional environment:
+//
+//	OMADA_INSECURE_TLS  "true" to skip TLS certificate verification
+//	OMADA_LIVE_DELAY    pause between calls (e.g. "100ms") to stay under
+//	                    the controller's rate limit (errorCode -7132)
 package livetest
 
 import (
@@ -90,6 +96,10 @@ type Config struct {
 	InsecureTLS bool
 	// PerOpTimeout bounds a single endpoint call. Zero means 30s.
 	PerOpTimeout time.Duration
+	// PerOpDelay pauses between endpoint calls. The controller rate-limits
+	// fast bursts (envelope errorCode -7132); a small delay keeps the run
+	// under the limit. Zero disables it.
+	PerOpDelay time.Duration
 }
 
 // ConfigFromEnv reads the live configuration from the environment.
@@ -100,6 +110,16 @@ func ConfigFromEnv() (Config, error) {
 		ClientID:     os.Getenv("OMADA_CLIENT_ID"),
 		ClientSecret: os.Getenv("OMADA_CLIENT_SECRET"),
 		InsecureTLS:  os.Getenv("OMADA_INSECURE_TLS") == "1" || os.Getenv("OMADA_INSECURE_TLS") == "true",
+	}
+	if d := os.Getenv("OMADA_LIVE_DELAY"); d != "" {
+		delay, err := time.ParseDuration(d)
+		if err != nil {
+			return cfg, fmt.Errorf("OMADA_LIVE_DELAY: %w", err)
+		}
+		if delay < 0 {
+			return cfg, fmt.Errorf("OMADA_LIVE_DELAY: must not be negative")
+		}
+		cfg.PerOpDelay = delay
 	}
 	var missing []string
 	for name, v := range map[string]string{
@@ -254,15 +274,29 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 			rep.SkippedByParam[missing]++
 			continue
 		}
+		// Throttle: keep the run under the controller's rate limit.
+		if cfg.PerOpDelay > 0 {
+			timer := time.NewTimer(cfg.PerOpDelay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+			case <-timer.C:
+			}
+		}
 		opCtx, cancel := context.WithTimeout(ctx, cfg.PerOpTimeout)
 		resp, callErr := op.call(opCtx, s)
-		cancel()
 		if callErr != nil {
+			cancel()
 			rep.Fail++
 			rep.Failures = append(rep.Failures, op.name+": "+transportDetail(callErr))
 			continue
 		}
+		// classifyResponse drains and closes the body. Only cancel the
+		// request context afterwards: cancelling it tears down the
+		// transport connection, which aborts the read of in-flight
+		// (larger) response bodies with "context canceled".
 		res, detail := classifyResponse(resp)
+		cancel()
 		switch res {
 		case ResultPass:
 			rep.Pass++
@@ -292,10 +326,17 @@ func classifyResponse(resp *http.Response) (Result, string) {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ResultFail, "read response body"
+		// Read errors are log-safe: they carry no body data and no URLs.
+		return ResultFail, fmt.Sprintf("read response body: %v", err)
 	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return ResultFail, fmt.Sprintf("HTTP %d", resp.StatusCode)
+	return classifyBody(resp.StatusCode, body)
+}
+
+// classifyBody maps a drained response to a Result. The detail string never
+// contains the response body.
+func classifyBody(status int, body []byte) (Result, string) {
+	if status < 200 || status > 299 {
+		return ResultFail, fmt.Sprintf("HTTP %d", status)
 	}
 	var env struct {
 		ErrorCode *int32  `json:"errorCode"`
@@ -319,32 +360,37 @@ func classifyResponse(resp *http.Response) (Result, string) {
 // is best effort: a failed lookup just leaves the ID empty and the
 // dependent endpoints are skipped. Nothing discovered is printed.
 func discover(ctx context.Context, perOp time.Duration, s *scope) {
-	call := func(f func(context.Context) (*http.Response, error)) *http.Response {
+	// callAndRead runs one best-effort GET and fully drains the body
+	// before the per-call context is cancelled: cancelling a request
+	// context tears down the transport connection, which would abort
+	// the read of an in-flight response body.
+	callAndRead := func(f func(context.Context) (*http.Response, error)) (int, []byte) {
 		cctx, cancel := context.WithTimeout(ctx, perOp)
 		defer cancel()
 		resp, err := f(cctx)
 		if err != nil {
-			return nil
+			return 0, nil
 		}
-		return resp
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, body
 	}
 
 	// Site list: the root of site-scoped discovery.
-	if resp := call(func(c context.Context) (*http.Response, error) {
+	if _, body := callAndRead(func(c context.Context) (*http.Response, error) {
 		return s.site.GetSiteList(c, s.omadacID, &site.GetSiteListParams{Page: 1, PageSize: 10})
-	}); resp != nil {
-		s.siteID = firstIDFrom(resp, "siteId")
+	}); body != nil {
+		s.siteID = firstIDFromBody(body, "siteId")
 	}
 	if s.siteID == "" {
 		return
 	}
 
 	// Device list: first device overall plus first per type.
-	if resp := call(func(c context.Context) (*http.Response, error) {
+	if _, body := callAndRead(func(c context.Context) (*http.Response, error) {
 		return s.devices.GetDeviceList(c, s.omadacID, s.siteID, &device.GetDeviceListParams{Page: 1, PageSize: 100})
-	}); resp != nil {
-		rows, _ := listRows(resp)
-		for _, row := range rows {
+	}); body != nil {
+		for _, row := range listRowsFromBody(body) {
 			mac, _ := row["mac"].(string)
 			typ, _ := row["type"].(string)
 			if mac == "" {
@@ -372,80 +418,76 @@ func discover(ctx context.Context, perOp time.Duration, s *scope) {
 
 	// MSP probe: an org-level API serves MSP endpoints with mspId =
 	// omadacId when the org is an MSP; a business error means it is not.
-	if resp := call(func(c context.Context) (*http.Response, error) {
+	if status, body := callAndRead(func(c context.Context) (*http.Response, error) {
 		return s.msp.GetMspMailServerStatusGlobal(c, s.omadacID)
-	}); resp != nil {
-		if res, _ := classifyResponse(resp); res == ResultPass {
+	}); status != 0 {
+		if res, _ := classifyBody(status, body); res == ResultPass {
 			s.mspID = s.omadacID
 		}
 	}
 
 	if s.mspID != "" {
-		if resp := call(func(c context.Context) (*http.Response, error) {
+		if _, body := callAndRead(func(c context.Context) (*http.Response, error) {
 			return s.site.GetCustomerList(c, s.mspID, &site.GetCustomerListParams{Page: 1, PageSize: 10})
-		}); resp != nil {
-			s.customerID = firstIDFrom(resp, "customerId")
+		}); body != nil {
+			s.customerID = firstIDFromBody(body, "customerId")
 		}
 	}
 
-	if resp := call(func(c context.Context) (*http.Response, error) {
+	if _, body := callAndRead(func(c context.Context) (*http.Response, error) {
 		return s.lans.GetLanNetworkList(c, s.omadacID, s.siteID, &lan.GetLanNetworkListParams{Page: 1, PageSize: 10})
-	}); resp != nil {
-		s.networkID = firstIDFrom(resp, "lanId", "networkId", "id")
+	}); body != nil {
+		s.networkID = firstIDFromBody(body, "lanId", "networkId", "id")
 	}
 
-	if resp := call(func(c context.Context) (*http.Response, error) {
+	if _, body := callAndRead(func(c context.Context) (*http.Response, error) {
 		// Type 3 = ap and wireless router.
 		return s.wireless.GetSsidsBySite(c, s.omadacID, s.siteID, &wireless.GetSsidsBySiteParams{Type: 3})
-	}); resp != nil {
-		s.ssidID = firstIDFrom(resp, "ssidId", "id")
+	}); body != nil {
+		s.ssidID = firstIDFromBody(body, "ssidId", "id")
 	}
 
-	if resp := call(func(c context.Context) (*http.Response, error) {
+	if _, body := callAndRead(func(c context.Context) (*http.Response, error) {
 		return s.vpn.GetAllVpnList(c, s.omadacID, s.siteID)
-	}); resp != nil {
-		s.vpnID = firstIDFrom(resp, "id", "vpnId")
+	}); body != nil {
+		s.vpnID = firstIDFromBody(body, "id", "vpnId")
 	}
 
-	if resp := call(func(c context.Context) (*http.Response, error) {
+	if _, body := callAndRead(func(c context.Context) (*http.Response, error) {
 		return s.clients.GetGridActiveClients(c, s.omadacID, s.siteID, &client.GetGridActiveClientsParams{Page: 1, PageSize: 10})
-	}); resp != nil {
-		s.clientMac = firstIDFrom(resp, "mac")
+	}); body != nil {
+		s.clientMac = firstIDFromBody(body, "mac")
 	}
 }
 
-// listRows extracts the data rows of a list response: result.data when the
-// result is a grid object, result itself when it is a bare array.
-func listRows(resp *http.Response) ([]map[string]interface{}, error) {
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+// listRowsFromBody extracts the data rows of a list response body:
+// result.data when the result is a grid object, result itself when it is a
+// bare array.
+func listRowsFromBody(body []byte) []map[string]interface{} {
 	var env struct {
 		Result json.RawMessage `json:"result"`
 	}
 	if json.Unmarshal(body, &env) != nil || len(env.Result) == 0 {
-		return nil, nil
+		return nil
 	}
 	var grid struct {
 		Data []map[string]interface{} `json:"data"`
 	}
 	if json.Unmarshal(env.Result, &grid) == nil && grid.Data != nil {
-		return grid.Data, nil
+		return grid.Data
 	}
 	var bare []map[string]interface{}
 	if json.Unmarshal(env.Result, &bare) == nil {
-		return bare, nil
+		return bare
 	}
-	return nil, nil
+	return nil
 }
 
-// firstIDFrom reads a list response and returns the first row's value for
-// the first key that is present. The value is used internally only.
-func firstIDFrom(resp *http.Response, keys ...string) string {
-	rows, _ := listRows(resp)
-	for _, row := range rows {
+// firstIDFromBody reads a list response body and returns the first row's
+// value for the first key that is present. The value is used internally
+// only; it is never printed.
+func firstIDFromBody(body []byte, keys ...string) string {
+	for _, row := range listRowsFromBody(body) {
 		for _, k := range keys {
 			if v, ok := row[k].(string); ok && v != "" {
 				return v

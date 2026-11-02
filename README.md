@@ -258,6 +258,11 @@ go test -tags live ./cloud/livetest -v -count=1
 controllers that serve the stock self-signed certificate (`CN=localhost`, no
 SAN). It is opt-in and documented as such on `cloud.Options.InsecureTLS`.
 
+`OMADA_LIVE_DELAY` (e.g. `100ms`) pauses between endpoint calls. The
+controller rate-limits fast bursts (envelope `errorCode -7132`); a small
+delay keeps the ~1,000-call run under the limit so the report reflects real
+endpoint behavior. CI sets it to `100ms`.
+
 The run **fails** on transport errors and non-2xx responses (401/403/404/405/5xx),
 and **reports** (without failing) business failures — HTTP 200 with a
 non-zero `errorCode` — which a read-only org legitimately gets for

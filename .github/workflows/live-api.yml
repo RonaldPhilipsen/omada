@@ -53,4 +53,8 @@ jobs:
           # (CN=localhost, no SAN); verification must be skipped for it.
           # Remove this once a proper certificate is installed.
           OMADA_INSECURE_TLS: "true"
+          # The controller rate-limits fast bursts (envelope errorCode
+          # -7132). A 100ms pause keeps the ~1,000-call run under the
+          # limit so the report reflects real endpoint behavior.
+          OMADA_LIVE_DELAY: "100ms"
         run: go test -tags live ./cloud/livetest -v -count=1

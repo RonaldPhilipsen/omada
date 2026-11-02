@@ -2,7 +2,12 @@
 
 Date: 2026-11-02
 Branch: `omada-cloud` (worktree `.worktrees/omada-cloud`, based on `main` @ `3539c74`)
-Status: **code complete and pushed; blocked on the live token endpoint (server-side)**
+Status: **UNBLOCKED and green.** The token endpoint works on the LAN address
+`https://192.168.0.2:443` and the public host `https://omada.rphilipsen.nl:443`.
+The full live read-only suite passes on both: `total=1045 pass=487 biz=160
+skip=398 fail=0`. A client bug (context cancelled before the response body was
+read) and a rate-limit burst were fixed; CI env secrets are set. See the
+"Resolution (2026-11-02)" section at the bottom.
 
 ## The task (from the user)
 
@@ -185,3 +190,52 @@ Probes (all from this machine, 2026-11-01/02):
   cloud-based controllers "is not supported ... already on our roadmap" —
   the user's controller evidently now exposes it via the regional cloud
   endpoint, which is exactly why pinning the right URL matters.
+
+## Resolution (2026-11-02)
+
+The block was resolved without any server-side change. Summary of what
+happened and what changed in the branch:
+
+1. **The token endpoint works on the controller's own address.** The user
+   supplied the verbatim "Interface Access Address"
+   (`https://192.168.0.2:443`) and Omada ID
+   (`803d74060572a8ec2ecebe22591f1a89`).
+   `POST /openapi/authorize/token?grant_type=client_credentials` returns
+   `errorCode 0` + `accessToken` there — and also on the public host
+   `https://omada.rphilipsen.nl:443`. The `500`/`403` seen earlier was the
+   `:8043` port and the cloud host, not the `:443` addresses. No client
+   change was needed for the token flow.
+
+2. **Fixed a client bug: "read response body" failures.** 4 of 1045 GETs
+   (`client.GetClientActivity`, `security.GetGridArpDetects`,
+   `security.GetGridDhcpSnoops`, `security.GetRules`) failed because
+   `Run`/`discover` cancelled the per-call `context` **before** the response
+   body was read. Cancelling a request context tears down the transport
+   connection, which aborts the read of an in-flight (larger) body with
+   `context canceled`. Fix in `cloud/livetest/livetest.go`: drain and close
+   the body first, then cancel; `discover` now uses a `callAndRead` helper
+   that fully reads the body inside the call. `classifyResponse` also
+   surfaces the real read error (log-safe).
+
+3. **Added `OMADA_LIVE_DELAY` throttling.** The controller rate-limits fast
+   bursts (envelope `errorCode -7132`); an unthrottled run produced ~136
+   `-7132` BIZ lines. A per-op delay (CI sets `100ms`) keeps the run under
+   the limit so the report reflects real endpoint behavior. New optional
+   `Config.PerOpDelay`, read from `OMADA_LIVE_DELAY`.
+
+4. **CI wired up.** The GitHub `Test` environment now defines
+   `OMADA_TEST_BASE_URL` (`https://omada.rphilipsen.nl:443` — the public
+   host, since GitHub runners cannot reach the LAN `192.168.0.2`),
+   `OMADA_TEST_OMADAC_ID`, plus the pre-existing `OMADA_TEST_CLIENT_ID` /
+   `OMADA_TEST_CLIENT_SECRET`. `live-api.yml` sets `OMADA_LIVE_DELAY: 100ms`
+   and keeps `OMADA_INSECURE_TLS: "true"` (stock self-signed cert).
+
+Result (both LAN and public host, with `OMADA_LIVE_DELAY=100ms`):
+
+```
+live read-only: total=1045 pass=487 biz=160 skip=398 fail=0
+```
+
+The 160 BIZ lines are legitimate business errors (undeployed features /
+"no permission" on a read-only org) and are expected. The 398 SKIPs are
+endpoints whose path parameters the org has no resource to supply.
