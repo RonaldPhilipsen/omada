@@ -1,6 +1,8 @@
 package cloud
 
 import (
+	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net/http"
@@ -40,7 +42,14 @@ type Options struct {
 	OmadacID     string // on-prem org-level mode
 	ClientID     string // on-prem org-level mode
 	ClientSecret string // on-prem org-level mode
-	HTTPClient   *http.Client
+	// InsecureTLS disables TLS certificate verification for every request,
+	// including token requests. Enable it only for controllers that serve
+	// the stock self-signed certificate (CN=localhost, no SAN), which
+	// fails hostname verification in every modern client. Prefer installing
+	// a proper certificate when possible: with verification off the
+	// credentials are exposed to any on-path attacker.
+	InsecureTLS bool
+	HTTPClient  *http.Client
 }
 
 // Client is a northbound Omada cloud API client. Every domain accessor
@@ -73,6 +82,17 @@ func New(opts Options) (*Client, error) {
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 
+	if opts.InsecureTLS {
+		if opts.HTTPClient == nil {
+			opts.HTTPClient = &http.Client{}
+		}
+		opts.HTTPClient.Transport = &http.Transport{
+			Proxy:             http.ProxyFromEnvironment,
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
+			ForceAttemptHTTP2: true,
+		}
+	}
+
 	var auth authenticator
 	if hosted {
 		auth = NewTokenProvider(baseURL, opts.Username, opts.Password, opts.HTTPClient)
@@ -92,6 +112,14 @@ func New(opts Options) (*Client, error) {
 // InvalidateToken drops the cached token so the next request re-authenticates.
 func (c *Client) InvalidateToken() {
 	c.auth.Invalidate()
+}
+
+// PreflightToken forces a token fetch (or serves the cached token) so
+// callers can surface authentication problems — bad credentials,
+// unreachable or failing token endpoints — before making domain calls.
+func (c *Client) PreflightToken(ctx context.Context) error {
+	_, err := c.auth.HeaderValue(ctx)
+	return err
 }
 
 // authTransport injects an auth header into every request. On a 401 response

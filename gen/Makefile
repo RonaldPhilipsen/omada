@@ -1,6 +1,6 @@
 OAPI ?= $(shell go env GOPATH)/bin/oapi-codegen
 
-.PHONY: fetch patch verify configs generate gen
+.PHONY: fetch patch verify configs generate gen livetest
 
 fetch:
 	python3 fetch_spec.py
@@ -19,3 +19,7 @@ generate:
 	gofmt -w ../cloud
 
 gen: fetch patch verify configs generate
+
+livetest:
+	python3 gen_livetest.py
+	gofmt -w ../cloud/livetest

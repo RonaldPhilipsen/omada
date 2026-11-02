@@ -3,12 +3,20 @@ package cloud
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/RonaldPhilipsen/omada/cloud/site"
 )
@@ -355,5 +363,65 @@ func Test401RetryResendsRequestBody(t *testing.T) {
 	}
 	if m.tokenHits != 2 {
 		t.Fatalf("token hits = %d, want 2", m.tokenHits)
+	}
+}
+
+// selfSignedCert returns a self-signed certificate for example.com, which
+// does not match the 127.0.0.1 address the test server listens on.
+func selfSignedCert(t *testing.T) tls.Certificate {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	tmpl := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("create certificate: %v", err)
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+func TestInsecureTLSOption(t *testing.T) {
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"tok-1","expires_in":3600}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"errorCode":0}`))
+	}))
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{selfSignedCert(t)}}
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+
+	// With InsecureTLS the hostname-mismatched certificate is accepted,
+	// including for the token request.
+	c, err := New(Options{BaseURL: srv.URL, Username: "u", Password: "p", InsecureTLS: true})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	resp, err := c.Site().GetMspClusterNodesInfo(context.Background(), "msp-1")
+	if err != nil {
+		t.Fatalf("GetMspClusterNodesInfo with InsecureTLS: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	// Without it, the same request must fail certificate verification.
+	strict, err := New(Options{BaseURL: srv.URL, Username: "u", Password: "p"})
+	if err != nil {
+		t.Fatalf("New strict: %v", err)
+	}
+	if _, err := strict.Site().GetMspClusterNodesInfo(context.Background(), "msp-1"); err == nil {
+		t.Fatal("GetMspClusterNodesInfo without InsecureTLS succeeded, want certificate error")
 	}
 }

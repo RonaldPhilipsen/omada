@@ -237,3 +237,57 @@ changed. A new upstream tag fails `verify_mapping.py` loudly; extend
 `go test ./... -race -count=1` covers both auth flows, token caching and
 refresh, the 401 retry, header shape, envelope errors and paging, plus
 representative `httptest` coverage for each of the 19 domain packages.
+
+### Live read-only test
+
+`cloud/livetest` (build tag `live`) probes **every GET operation** of the
+generated client against a live controller: it discovers a site and its
+devices, then walks the full read-only table, resolving each endpoint's path
+parameters from the discovered resources. Endpoints whose resources the org
+does not have (or that cannot be discovered) are skipped and counted.
+
+```bash
+OMADA_BASE_URL=https://omada.example.com:8043 \
+OMADA_OMADAC_ID=<org-id> \
+OMADA_CLIENT_ID=<client-id> \
+OMADA_CLIENT_SECRET=<client-secret> \
+go test -tags live ./cloud/livetest -v -count=1
+```
+
+`OMADA_INSECURE_TLS=true` skips TLS certificate verification; use it for
+controllers that serve the stock self-signed certificate (`CN=localhost`, no
+SAN). It is opt-in and documented as such on `cloud.Options.InsecureTLS`.
+
+`OMADA_LIVE_DELAY` (e.g. `100ms`) pauses between endpoint calls. The
+controller rate-limits fast bursts (envelope `errorCode -7132`); a small
+delay keeps the ~1,000-call run under the limit so the report reflects real
+endpoint behavior. CI sets it to `100ms`.
+
+The run **fails** on transport errors and non-2xx responses (401/403/404/405/5xx),
+and **reports** (without failing) business failures — HTTP 200 with a
+non-zero `errorCode` — which a read-only org legitimately gets for
+undeployed features.
+
+**Log safety:** the report contains only operation names, HTTP status codes
+and envelope `errorCode`/`msg` values. Response bodies, resource IDs, MAC
+addresses and IP addresses never reach the output, so the logs are safe to
+keep public.
+
+The test is wired into:
+
+- **Pre-commit** (`.pre-commit-config.yaml`): `pre-commit install` once per
+  clone; the hook runs the live test on every commit and skips fast when the
+  `OMADA_*` environment is not set.
+- **CI** (`.github/workflows/live-api.yml`): nightly (06:30 UTC),
+  `workflow_dispatch`, and pull requests that touch `cloud/livetest/**` or
+  the workflow itself. It runs on the self-hosted `omada-runner` and probes
+  the controller sequentially through the on-premises (LAN) and public
+  (cloud) addresses, using the GitHub `Test` environment secrets
+  `OMADA_TEST_BASE_URL`, `OMADA_TEST_CLOUD_URL`, `OMADA_TEST_OMADAC_ID`,
+  `OMADA_TEST_CLIENT_ID` and `OMADA_TEST_CLIENT_SECRET`.
+
+Regenerate the live table after a spec regeneration:
+
+```bash
+make -C gen livetest
+```
