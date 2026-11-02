@@ -43,6 +43,11 @@ jobs:
     environment: Test
     runs-on: omada-runner
     timeout-minutes: 30
+    env:
+      # The runner image lacks libc development headers, so cgo
+      # compilation (runtime/cgo, stdlib.h) fails. The client is pure
+      # Go; build without cgo.
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
