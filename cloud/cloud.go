@@ -1,8 +1,10 @@
 package cloud
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -30,6 +32,15 @@ import (
 )
 
 const defaultBaseURL = "https://use1-omada-northbound.tplinkcloud.com"
+
+const (
+	// errCodeTokenExpiredOnPrem is the envelope errorCode the on-prem
+	// controller returns with an HTTP 200 when the access token has expired.
+	errCodeTokenExpiredOnPrem = -44112
+	// errCodeTokenExpiredHosted is the envelope errorCode the hosted service
+	// reports for a missing or expired token, normally alongside an HTTP 401.
+	errCodeTokenExpiredHosted = -44116
+)
 
 // Options configures a northbound cloud Client. Exactly one credential set
 // is required: hosted (Username + Password) or on-prem org-level
@@ -126,11 +137,13 @@ func (c *Client) PreflightToken(ctx context.Context) error {
 	return err
 }
 
-// authTransport injects an auth header into every request. On a 401 response
-// it force-refreshes the token and retries the request exactly once,
-// rebuilding the request body from GetBody when available so the retry
-// carries the same body; a second 401 is returned as-is (the token is
-// refreshed again so the next request starts with a fresh one).
+// authTransport injects an auth header into every request. When the
+// controller signals an expired token — an HTTP 401, or a 2xx envelope
+// carrying a token-expired errorCode — it force-refreshes the token and
+// retries the request exactly once, rebuilding the request body from
+// GetBody when available so the retry carries the same body; a second
+// expiry signal is returned as-is (the token is refreshed again so the
+// next request starts with a fresh one).
 type authTransport struct {
 	base http.RoundTripper
 	auth authenticator
@@ -145,7 +158,7 @@ func (t authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	out.Header.Set("Authorization", tok)
 
 	resp, err := t.base.RoundTrip(out)
-	if err != nil || resp.StatusCode != http.StatusUnauthorized {
+	if err != nil || !needsTokenRefresh(resp) {
 		return resp, err
 	}
 
@@ -174,11 +187,38 @@ func (t authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode == http.StatusUnauthorized {
+	if needsTokenRefresh(resp) {
 		t.auth.Invalidate()
 		_, _ = t.auth.HeaderValue(req.Context())
 	}
 	return resp, nil
+}
+
+// needsTokenRefresh reports whether the response signals an expired token:
+// an HTTP 401, or a 2xx body whose envelope carries a token-expired
+// errorCode (the on-prem controller answers token expiry with HTTP 200 and
+// errorCode -44112). The body is read for the check and re-wrapped so the
+// caller still receives it.
+func needsTokenRefresh(resp *http.Response) bool {
+	if resp.StatusCode == http.StatusUnauthorized {
+		return true
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return false
+	}
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		return false
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	var env struct {
+		ErrorCode int32 `json:"errorCode"`
+	}
+	if json.Unmarshal(body, &env) != nil {
+		return false
+	}
+	return env.ErrorCode == errCodeTokenExpiredOnPrem || env.ErrorCode == errCodeTokenExpiredHosted
 }
 
 func drainAndClose(resp *http.Response) {

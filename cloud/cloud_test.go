@@ -316,6 +316,72 @@ func Test401TwiceFails(t *testing.T) {
 	}
 }
 
+func TestEnvelopeTokenExpiredTriggersRefreshAndRetry(t *testing.T) {
+	var first bool
+	m := newMockNorthbound(t, func(w http.ResponseWriter, r *http.Request) {
+		if !first {
+			first = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"errorCode":-44112,"msg":"token expired"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"errorCode":0,"msg":"ok","result":{}}`))
+	})
+
+	c, err := New(Options{BaseURL: m.srv.URL, OmadacID: "org-1", ClientID: "cid", ClientSecret: "sec"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	resp, err := c.Site().GetSiteList(context.Background(), "org-1", nil)
+	if err != nil {
+		t.Fatalf("GetSiteList: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 after refresh and retry", resp.StatusCode)
+	}
+	if m.apiHits != 2 {
+		t.Fatalf("api hits = %d, want 2", m.apiHits)
+	}
+	if m.tokenHits != 2 {
+		t.Fatalf("token hits = %d, want 2", m.tokenHits)
+	}
+}
+
+func TestEnvelopeBusinessErrorPassesThrough(t *testing.T) {
+	m := newMockNorthbound(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"errorCode":-1001,"msg":"invalid parameter"}`))
+	})
+
+	c, err := New(Options{BaseURL: m.srv.URL, OmadacID: "org-1", ClientID: "cid", ClientSecret: "sec"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	resp, err := c.Site().GetSiteList(context.Background(), "org-1", nil)
+	if err != nil {
+		t.Fatalf("GetSiteList: %v", err)
+	}
+	defer resp.Body.Close()
+	var env struct {
+		ErrorCode int32  `json:"errorCode"`
+		Msg       string `json:"msg"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		t.Fatalf("decoding response body: %v", err)
+	}
+	if env.ErrorCode != -1001 {
+		t.Fatalf("errorCode = %d, want -1001 (body must pass through untouched)", env.ErrorCode)
+	}
+	if m.apiHits != 1 {
+		t.Fatalf("api hits = %d, want 1 (no retry on business errors)", m.apiHits)
+	}
+	if m.tokenHits != 1 {
+		t.Fatalf("token hits = %d, want 1 (no re-auth on business errors)", m.tokenHits)
+	}
+}
+
 // bodySpy records the body each non-token request is sent with, then
 // forwards the request carrying a fresh copy of the captured bytes. It
 // makes what the auth transport transmits on each attempt observable

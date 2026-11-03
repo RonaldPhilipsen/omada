@@ -176,11 +176,12 @@ call and return `cloud.NewAPIError(code, msg)`, a `*cloud.APIError` whose
 `Code` and `Msg` carry the service values.
 
 The hosted service reports a missing or expired token as HTTP 401 with
-envelope code `-44116`. The transport handles that case: the cached token is
-dropped, a new token is fetched, and the request is retried **exactly once**
-(the request body is replayed). A second 401 is returned to the caller. Other
-non-2xx responses are returned as-is with the body intact for the caller to
-interpret.
+envelope code `-44116`; the on-prem controller reports an expired token as
+HTTP 200 with envelope code `-44112`. The transport handles both signals:
+the cached token is dropped, a new token is fetched, and the request is
+retried **exactly once** (the request body is replayed). A second expiry
+signal is returned to the caller. Other responses are returned as-is with
+the body intact for the caller to interpret.
 
 ### Paging
 
