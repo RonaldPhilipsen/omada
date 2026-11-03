@@ -109,6 +109,10 @@ func New(opts Options) (*Client, error) {
 	return &Client{baseURL: baseURL, auth: auth, httpClient: httpClient}, nil
 }
 
+// HTTPClient returns the client's auth transport wrapped http.Client for
+// generic dispatch-style calls through the same token provider.
+func (c *Client) HTTPClient() *http.Client { return c.httpClient }
+
 // InvalidateToken drops the cached token so the next request re-authenticates.
 func (c *Client) InvalidateToken() {
 	c.auth.Invalidate()

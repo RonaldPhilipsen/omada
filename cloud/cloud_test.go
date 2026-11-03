@@ -120,6 +120,43 @@ func TestOrgRequestCarriesAccessTokenHeader(t *testing.T) {
 	}
 }
 
+func TestHTTPClientAccessor(t *testing.T) {
+	m := newMockNorthbound(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "AccessToken=tok-1" {
+			t.Errorf("Authorization = %q, want %q", got, "AccessToken=tok-1")
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"errorCode":0}`))
+	})
+
+	c, err := New(Options{BaseURL: m.srv.URL, OmadacID: "org-1", ClientID: "cid", ClientSecret: "csecret"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	cl := c.HTTPClient()
+	if cl == nil {
+		t.Fatal("HTTPClient() = nil, want non-nil")
+	}
+	req, err := http.NewRequest(http.MethodGet, m.srv.URL+"/openapi/v1/omac-1/sites", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := cl.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if m.apiHits != 1 {
+		t.Fatalf("api hits = %d, want 1", m.apiHits)
+	}
+	if m.tokenHits != 1 {
+		t.Fatalf("token hits = %d, want 1", m.tokenHits)
+	}
+}
+
 func TestOrg401TriggersRefreshAndRetry(t *testing.T) {
 	var first bool
 	m := newMockNorthbound(t, func(w http.ResponseWriter, r *http.Request) {
