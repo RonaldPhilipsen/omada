@@ -32,7 +32,7 @@ type Connection interface {
 	// SiteVersion returns the site's reported version.
 	SiteVersion(ctx context.Context, site string) (models.Version, error)
 	// DoMultipart performs a multipart form-data request against an explicit URL.
-	DoMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, csrf string) (map[string]any, error)
+	DoMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, files []FilePart, csrf string) (map[string]any, error)
 	// ControllerInfo fetches unauthenticated controller diagnostics.
 	ControllerInfo(ctx context.Context) (map[string]any, error)
 	// ControllerVersion returns the controller version, fetching it if unknown.
@@ -92,13 +92,16 @@ func newConn(rawURL, username, password string, httpClient *http.Client) (*conn,
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", models.ErrBadControllerURL, err)
 	}
+	jar := newPermissiveJar().(*permissiveJar)
+	client := *httpClient // The session cookie needs a jar; keep the caller's client unchanged.
+	client.Jar = jar
 	return &conn{
 		base:     parsed.URL.String(),
 		host:     parsed.URL.Hostname(),
 		username: username,
 		password: password,
-		client:   httpClient,
-		jar:      newPermissiveJar().(*permissiveJar),
+		client:   &client,
+		jar:      jar,
 		now:      time.Now,
 	}, nil
 }
@@ -333,10 +336,17 @@ func (c *conn) do(ctx context.Context, method, u string, query url.Values, body 
 	return c.perform(ctx, req)
 }
 
+// FilePart is one file in a multipart form-data request.
+type FilePart struct {
+	Field    string
+	Filename string
+	Content  string
+}
+
 // DoMultipart performs a multipart form-data request and unwraps the Omada
 // response envelope. The caller supplies the csrf token to send (a snapshot
 // taken under authMu); DoMultipart itself never touches shared auth state.
-func (c *conn) DoMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, csrf string) (map[string]any, error) {
+func (c *conn) DoMultipart(ctx context.Context, method, u string, query url.Values, fields map[string]string, files []FilePart, csrf string) (map[string]any, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	for name, value := range fields {
@@ -345,6 +355,15 @@ func (c *conn) DoMultipart(ctx context.Context, method, u string, query url.Valu
 			return nil, fmt.Errorf("build multipart form: %w", err)
 		}
 		if _, err := io.WriteString(w, value); err != nil {
+			return nil, fmt.Errorf("build multipart form: %w", err)
+		}
+	}
+	for _, f := range files {
+		w, err := mw.CreateFormFile(f.Field, f.Filename)
+		if err != nil {
+			return nil, fmt.Errorf("build multipart form: %w", err)
+		}
+		if _, err := io.WriteString(w, f.Content); err != nil {
 			return nil, fmt.Errorf("build multipart form: %w", err)
 		}
 	}
@@ -394,7 +413,7 @@ func (c *conn) perform(ctx context.Context, req *http.Request) (map[string]any, 
 	}
 
 	if !isJSON {
-		return nil, models.ErrLoginSessionClosed
+		return nil, fmt.Errorf("%w: unexpected response content type %q from %s", models.ErrLoginSessionClosed, resp.Header.Get("Content-Type"), req.URL.Path)
 	}
 
 	var content map[string]any
