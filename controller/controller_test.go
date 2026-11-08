@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"encoding/json"
+	"io"
+	"reflect"
 
 	"github.com/RonaldPhilipsen/omada/controller/internal/testutil"
 )
@@ -160,39 +162,42 @@ func TestSiteClientValidatesSite(t *testing.T) {
 }
 
 func TestSetCertificate(t *testing.T) {
-	patched := false
+	base := "/" + testutil.TestControllerID + "/api/v2/"
+	var patch map[string]any
+	readUpload := func(t *testing.T, r *http.Request, wantName, wantBody, wantData string) {
+		t.Helper()
+		if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data") {
+			t.Errorf("upload content type = %q, want multipart/form-data", got)
+		}
+		f, h, err := r.FormFile("file")
+		if err != nil {
+			t.Fatalf("read file part: %v", err)
+		}
+		defer f.Close()
+		body, err := io.ReadAll(f)
+		if err != nil {
+			t.Fatalf("read file body: %v", err)
+		}
+		if h.Filename != wantName || string(body) != wantBody {
+			t.Errorf("file = %q with body %q, want %q with body %q", h.Filename, body, wantName, wantBody)
+		}
+		if got := r.FormValue("data"); got != wantData {
+			t.Errorf("data = %q, want %q", got, wantData)
+		}
+	}
 	cl := testutil.NewTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/cmd/uploadCert":
-			if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data") {
-				t.Errorf("upload content type = %q, want multipart/form-data", got)
-			}
-			if err := r.ParseMultipartForm(32 << 20); err != nil {
-				t.Errorf("parse multipart form: %v", err)
-				return
-			}
-			if got := r.FormValue("key"); got != "key-pem" {
-				t.Errorf("upload key = %q, want %q", got, "key-pem")
-			}
-			if got := r.FormValue("cert"); got != "cert-pem" {
-				t.Errorf("upload cert = %q, want %q", got, "cert-pem")
-			}
-			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"cerId": "cer-1", "cerName": "cert"}})
-		case r.URL.Path == "/"+testutil.TestControllerID+"/api/v2/controller/setting":
-			patched = true
-			var body map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		switch r.URL.Path {
+		case base + "files/controller/certificate":
+			readUpload(t, r, "omada-cert.pem", "cert-pem", `{"cerName":"omada-cert.pem"}`)
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"cerId": "cer-1", "cerName": "omada-cert.pem"}})
+		case base + "files/controller/key":
+			readUpload(t, r, "omada-key.pem", "key-pem", `{"keyName":"omada-key.pem"}`)
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"keyId": "key-1", "keyName": "omada-key.pem"}})
+		case base + "controller/setting":
+			if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 				t.Errorf("decode patch body: %v", err)
-				return
 			}
-			cert, ok := body["certificate"].(map[string]any)
-			if !ok {
-				t.Fatalf("patch body missing certificate: %v", body)
-			}
-			if cert["cerType"] != "PFX" {
-				t.Errorf("patch certificate cerType = %v, want PFX", cert["cerType"])
-			}
-			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{"success": true}})
+			testutil.WriteJSON(t, w, map[string]any{"errorCode": 0, "result": map[string]any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -200,8 +205,12 @@ func TestSetCertificate(t *testing.T) {
 	if err := cl.SetCertificate(context.Background(), "key-pem", "cert-pem"); err != nil {
 		t.Fatalf("SetCertificate() error = %v", err)
 	}
-	if !patched {
-		t.Error("controller/setting was not patched after upload")
+	want := map[string]any{"certificate": map[string]any{
+		"cerId": "cer-1", "cerName": "omada-cert.pem", "cerType": "PEM", "enable": true,
+		"keyId": "key-1", "keyName": "omada-key.pem",
+	}}
+	if !reflect.DeepEqual(patch, want) {
+		t.Errorf("patch body = %v, want %v", patch, want)
 	}
 }
 

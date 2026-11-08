@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -211,26 +212,51 @@ func (cl *Controller) UpdateFirmwareChannel(ctx context.Context, section UpdateS
 	return err
 }
 
-// SetCertificate uploads a new certificate and enables it.
+// SetCertificate uploads a PEM certificate and its unencrypted private key,
+// then makes them the controller's HTTPS certificate. It changes only the
+// certificate setting.
 func (cl *Controller) SetCertificate(ctx context.Context, keyPEM, certPEM string) error {
-	m, err := cl.c.DoMultipart(ctx, "POST", cl.c.BuildURL("v2", "cmd/uploadCert", ""), nil, map[string]string{
-		"key":  keyPEM,
-		"cert": certPEM,
-	}, cl.c.CSRFToken())
+	const (
+		certName = "omada-cert.pem"
+		keyName  = "omada-key.pem"
+	)
+	cert, err := cl.uploadCertificateFile(ctx, "files/controller/certificate", "cerName", certName, certPEM)
 	if err != nil {
-		return err
+		return fmt.Errorf("upload certificate: %w", err)
+	}
+	key, err := cl.uploadCertificateFile(ctx, "files/controller/key", "keyName", keyName, keyPEM)
+	if err != nil {
+		return fmt.Errorf("upload key: %w", err)
+	}
+	cerID, keyID := models.MapStr(cert, "cerId"), models.MapStr(key, "keyId")
+	if cerID == "" || keyID == "" {
+		return fmt.Errorf("upload response missing certificate or key ID")
 	}
 	payload := map[string]any{
 		"certificate": map[string]any{
-			"cerId":       models.MapStr(m, "cerId"),
-			"cerName":     models.MapStr(m, "cerName"),
-			"cerType":     "PFX",
-			"enable":      true,
-			"keyPassword": "",
+			"cerId":   cerID,
+			"cerName": certName,
+			"cerType": "PEM",
+			"enable":  true,
+			"keyId":   keyID,
+			"keyName": keyName,
 		},
 	}
-	_, err = cl.c.RequestEndpoint(ctx, "PATCH", "v2", "controller/setting", "", nil, payload)
-	return err
+	if _, err := cl.c.RequestEndpoint(ctx, "PATCH", "v2", "controller/setting", "", nil, payload); err != nil {
+		return fmt.Errorf("activate certificate: %w", err)
+	}
+	return nil
+}
+
+// uploadCertificateFile stores one PEM file on the controller.
+func (cl *Controller) uploadCertificateFile(ctx context.Context, endpoint, nameField, filename, content string) (map[string]any, error) {
+	data, err := json.Marshal(map[string]string{nameField: filename})
+	if err != nil {
+		return nil, fmt.Errorf("marshal upload metadata: %w", err)
+	}
+	fields := map[string]string{"data": string(data)}
+	files := []conn.FilePart{{Field: "file", Filename: filename, Content: content}}
+	return cl.c.DoMultipart(ctx, "POST", cl.c.BuildURL("v2", endpoint, ""), nil, fields, files, cl.c.CSRFToken())
 }
 
 // Close releases pooled idle connections.
