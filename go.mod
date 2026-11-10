@@ -2,7 +2,7 @@ module github.com/RonaldPhilipsen/omada
 
 go 1.27.3
 
-require github.com/oapi-codegen/runtime v1.8.0
+require github.com/oapi-codegen/runtime v1.9.0
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
